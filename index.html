@@ -210,6 +210,7 @@ button { cursor: pointer; }
         <button class="tab" data-admin-tab="announcements">ANNOUNCEMENTS</button>
         <button class="tab" data-admin-tab="settings">SETTINGS</button>
         <button class="tab" data-admin-tab="directory">DIRECTORY</button>
+        <button class="tab owner-only-tab hidden" data-admin-tab="personnel_options">PERSONNEL OPTIONS</button>
       </div>
       <div id="adminContent"></div>
     </section>
@@ -223,7 +224,7 @@ button { cursor: pointer; }
   <div id="modalRoot"></div>
 
   <footer class="footer">
-    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.0</span>
+    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.1</span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -270,6 +271,7 @@ button { cursor: pointer; }
     profiles: [],
     announcements: [],
     settings: {terminal_name:'MISSION TERMINAL', command_name:'JEDI ORDER // OPERATIONS COMMAND', footer_text:'SECURE • AUTHORIZED PERSONNEL ONLY', system_status:'SECURE CHANNEL'},
+    personnelOptions: {rank:['Padawan','Knight','Master'], pathway:['Guardian','Consular','Sentinel','None'], class:['Weapon Master','Battlemaster','Instructor','Investigator','Shadow','Lorekeeper','Sage','Minor Council','High Council','Master of the Order','Grandmaster of the Order','None']},
     missionTypes: {WARFRONT:[...DEFAULT_MISSION_TYPES.WARFRONT], JEDI:[...DEFAULT_MISSION_TYPES.JEDI]},
     planets: [...DEFAULT_PLANETS],
     currentMission: null,
@@ -399,13 +401,21 @@ button { cursor: pointer; }
     const u = state.user;
     if(!u) return showView('auth');
     const history = state.applications.filter(a=>a.user_id===u.id && a.status==='approved').map(a=>({a,m:state.missions.find(m=>m.id===a.mission_id)})).filter(x=>x.m);
-    $('#profilePanel').innerHTML = `<div class="profile-card">
+    $('#profilePanel').innerHTML = `<div class="category-tabs"><button class="tab active" id="serviceRecordTab">SERVICE RECORD</button><button class="tab" id="editAccountTab">EDIT ACCOUNT</button></div><div id="profileTabContent"></div>`;
+    const service=()=>{ $('#serviceRecordTab').classList.add('active'); $('#editAccountTab').classList.remove('active'); $('#profileTabContent').innerHTML=`<div class="profile-card">
       <div class="profile-head"><div class="profile-avatar">${esc(initials(u.character_name||u.discord_user))}</div><div><h2>${esc(u.character_name||'Jedi Personnel')}</h2><p>${esc(u.discord_user||'Discord identity not recorded')}</p></div><div class="role-pill">${esc(roleLabel(u.role))}</div></div><div style="display:flex;gap:8px;margin:15px 0 0"><button class="ghost-btn" id="editOwnProfileBtn">EDIT PERSONNEL RECORD</button><button class="danger-btn" id="signOutBtn">END SESSION</button></div>
       <div class="profile-grid"><div><label>ROBLOX USER</label><strong>${esc(u.roblox_user||'—')}</strong></div><div><label>RANK</label><strong>${esc(u.rank||'—')}</strong></div><div><label>PATHWAY</label><strong>${esc(u.pathway||'—')}</strong></div><div><label>CLASS</label><strong>${esc(u.class||'—')}</strong></div><div><label>MISSIONS</label><strong>${history.length}</strong></div></div>
       <h3 style="font:700 13px Orbitron;color:var(--cyan);letter-spacing:.1em;margin:25px 0 12px">OPERATIONAL HISTORY</h3>
       ${history.length ? `<table class="history-table"><thead><tr><th>MISSION</th><th>TYPE</th><th>LOCATION</th><th>DATE</th><th>STATUS</th></tr></thead><tbody>${history.map(x=>`<tr><td>${esc(x.m.name)}</td><td>${esc(x.m.type)}</td><td>${esc(x.m.location)}</td><td>${esc(dateFmt(x.m.date))}</td><td style="color:var(--success)">ASSIGNED</td></tr>`).join('')}</tbody></table>` : `<div class="empty"><strong>NO COMPLETED ASSIGNMENTS</strong>Your approved mission history will appear here.</div>`}
-    </div>`;
-    bindProfileActions();
+    </div>`; bindProfileActions(); };
+    const account=async()=>{ $('#serviceRecordTab').classList.remove('active'); $('#editAccountTab').classList.add('active'); let email=''; if(!state.demo){const {data}=await db.auth.getUser();email=data?.user?.email||'';} $('#profileTabContent').innerHTML=`<div class="admin-card"><div class="eyebrow">ACCOUNT MANAGEMENT</div><h3 style="font:700 16px Orbitron;margin:6px 0 18px">EDIT ACCOUNT</h3><form id="accountForm"><div class="form-grid">
+      <div class="field"><label>EMAIL</label><input name="email" type="email" required value="${esc(email)}"></div><div class="field"><label>NEW PASSWORD</label><input name="password" type="password" minlength="6" placeholder="Leave blank to keep current password"></div>
+      <div class="field"><label>DISCORD USER</label><input name="discord_user" value="${esc(u.discord_user||'')}"></div><div class="field"><label>ROBLOX USER</label><input name="roblox_user" required value="${esc(u.roblox_user||'')}"></div>
+      <div class="field"><label>CHARACTER NAME</label><input name="character_name" required value="${esc(u.character_name||'')}"></div>${profileSelectFields(u)}
+      </div><div class="modal-actions"><button class="primary-btn">SAVE ACCOUNT CHANGES</button></div></form></div>`;
+      $('#accountForm').onsubmit=saveAccountChanges;
+    };
+    $('#serviceRecordTab').onclick=service; $('#editAccountTab').onclick=account; service();
   }
 
   async function loadSettings() {
@@ -428,15 +438,23 @@ button { cursor: pointer; }
     openProfileModal(state.user, true);
   }
 
+  function optionTags(category,current){ return (state.personnelOptions[category]||[]).map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`).join(''); }
+  function profileSelectFields(p){ return `<div class="field"><label>RANK</label><select name="rank" required><option value="" disabled ${p.rank?'':'selected'}>Select rank</option>${optionTags('rank',p.rank)}</select></div><div class="field"><label>PATHWAY</label><select name="pathway" required><option value="" disabled ${p.pathway?'':'selected'}>Select pathway</option>${optionTags('pathway',p.pathway)}</select></div><div class="field"><label>CLASS</label><select name="class" required><option value="" disabled ${p.class?'':'selected'}>Select class</option>${optionTags('class',p.class)}</select></div>`; }
+  async function saveAccountChanges(e){
+    e.preventDefault(); const fd=new FormData(e.currentTarget); const email=String(fd.get('email')||'').trim(); const password=String(fd.get('password')||'');
+    const patch={discord_user:String(fd.get('discord_user')||'').trim(),roblox_user:String(fd.get('roblox_user')||'').trim(),character_name:String(fd.get('character_name')||'').trim(),rank:fd.get('rank'),pathway:fd.get('pathway'),class:fd.get('class')};
+    if(state.demo){Object.assign(state.user,patch);toast('Demo account updated.','success');renderProfile();return;}
+    const authPatch={email}; if(password) authPatch.password=password; const {error:authError}=await db.auth.updateUser(authPatch); if(authError)return toast(authError.message,'error');
+    const {error}=await db.from('profiles').update(patch).eq('id',state.user.id); if(error)return toast(error.message,'error'); Object.assign(state.user,patch); setUser(state.user); toast(email?'Account updated. Email changes may require confirmation.':'Account updated.','success'); renderProfile();
+  }
+
   function openProfileModal(p, required=false) {
     $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">JEDI PERSONNEL RECORD</span><h2>${required?'COMPLETE PERSONNEL RECORD':'EDIT PERSONNEL RECORD'}</h2></div>${required?'':'<button class="close-btn" id="closeModal">×</button>'}</div>
       <form id="profileForm"><div class="form-grid">
-      <div class="field"><label>DISCORD USER</label><input value="${esc(p.discord_user||'')}" disabled></div>
+      <div class="field"><label>DISCORD USER</label><input name="discord_user" value="${esc(p.discord_user||'')}"></div>
       <div class="field"><label>ROBLOX USER</label><input name="roblox_user" required value="${esc(p.roblox_user||'')}"></div>
       <div class="field"><label>CHARACTER NAME</label><input name="character_name" required value="${esc(p.character_name||'')}"></div>
-      <div class="field"><label>RANK</label><input name="rank" required value="${esc(p.rank||'')}"></div>
-      <div class="field"><label>PATHWAY</label><input name="pathway" required value="${esc(p.pathway||'')}"></div>
-      <div class="field"><label>CLASS</label><input name="class" required value="${esc(p.class||'')}"></div>
+      ${profileSelectFields(p)}
       </div><div class="modal-actions">${required?'':'<button type="button" class="ghost-btn" id="cancelModal">CANCEL</button>'}<button class="primary-btn">${required?'SAVE PERSONNEL RECORD':'SAVE CHANGES'}</button></div></form></div></div>`;
     $('#closeModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML=''); $('#cancelModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML='');
     $('#profileForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');return;}const {error}=await db.from('profiles').update(patch).eq('id',p.id);if(error)return toast(error.message,'error');Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');};
@@ -469,6 +487,7 @@ button { cursor: pointer; }
     await Promise.all([loadMissions(), loadDirectory(), loadApplications(), loadNotifications()]);
     await loadAnnouncements();
     await loadSettings();
+    await loadPersonnelOptions();
     applySettings();
     await ensureProfileComplete();
   }
@@ -597,6 +616,7 @@ button { cursor: pointer; }
 
   function renderAdmin() {
     if(!isCommand()){showView('dashboard');return;}
+    $$('.owner-only-tab').forEach(b=>b.classList.toggle('hidden',!isOwner()));
     $$('.admin-tabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===state.adminTab));
     if(state.adminTab==='missions') renderAdminMissions();
     if(state.adminTab==='applications') renderAdminApplications();
@@ -604,6 +624,7 @@ button { cursor: pointer; }
     if(state.adminTab==='announcements') renderAdminAnnouncements();
     if(state.adminTab==='settings') renderAdminSettings();
     if(state.adminTab==='directory') renderAdminDirectory();
+    if(state.adminTab==='personnel_options') renderPersonnelOptions();
   }
   function renderAdminMissions(){
     $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CODE</th><th>MISSION</th><th>CATEGORY</th><th>THREAT</th><th>DATE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${state.missions.map(m=>`<tr><td>${esc(m.code)}</td><td>${esc(m.name)}</td><td>${esc(m.main_category)}</td><td>${esc(m.threat_level)}</td><td>${esc(dateFmt(m.date))}</td><td>${esc(m.status)}</td><td><div class="admin-actions"><button class="mini-btn" data-edit="${esc(m.id)}">EDIT</button><button class="mini-btn" data-open="${esc(m.id)}">VIEW</button><button class="mini-btn danger" data-delete="${esc(m.id)}">DELETE</button></div></td></tr>`).join('')}</tbody></table></div>`;
@@ -629,6 +650,25 @@ button { cursor: pointer; }
     const s=state.settings;
     $('#adminContent').innerHTML=`<div class="admin-card"><div class="eyebrow">TERMINAL CONFIGURATION</div><h3 style="font:700 16px Orbitron;margin:6px 0 18px">WEBSITE SETTINGS</h3><form id="settingsForm"><div class="form-grid"><div class="field"><label>TERMINAL NAME</label><input name="terminal_name" value="${esc(s.terminal_name||'MISSION TERMINAL')}"></div><div class="field"><label>COMMAND DESIGNATION</label><input name="command_name" value="${esc(s.command_name||'JEDI ORDER // OPERATIONS COMMAND')}"></div><div class="field"><label>SYSTEM STATUS LABEL</label><input name="system_status" value="${esc(s.system_status||'SECURE CHANNEL')}"></div><div class="field"><label>FOOTER NOTICE</label><input name="footer_text" value="${esc(s.footer_text||'SECURE • AUTHORIZED PERSONNEL ONLY')}"></div></div><div class="modal-actions"><button class="primary-btn">SAVE TERMINAL SETTINGS</button></div></form></div>`;
     $('#settingsForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');return;}const {error}=await db.from('site_settings').update(patch).eq('id',1);if(error)return toast(error.message,'error');Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');};
+  }
+
+  function renderPersonnelOptions(){
+    if(!isOwner()){state.adminTab='missions';return renderAdmin();}
+    const block=(key,label)=>`<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">OWNER AUTHORITY</span><h3>${label}</h3><p>These values appear in personnel dropdowns for every account.</p></div><button class="primary-btn" data-add-option="${key}">+ ADD</button></div><div class="directory-list">${(state.personnelOptions[key]||[]).map((v,i)=>`<div class="directory-row"><span>${esc(v)}</span><div class="admin-actions"><button class="mini-btn" data-rename-option="${key}|${i}">RENAME</button><button class="mini-btn danger" data-remove-option="${key}|${i}">REMOVE</button></div></div>`).join('')}</div></div>`;
+    $('#adminContent').innerHTML=`<div class="directory-grid">${block('rank','RANK OPTIONS')}${block('pathway','PATHWAY OPTIONS')}</div>${block('class','CLASS OPTIONS')}`;
+    $$('[data-add-option]').forEach(b=>b.onclick=()=>mutatePersonnelOption('add',b.dataset.addOption));
+    $$('[data-rename-option]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.renameOption.split('|');mutatePersonnelOption('rename',k,Number(i));});
+    $$('[data-remove-option]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.removeOption.split('|');mutatePersonnelOption('remove',k,Number(i));});
+  }
+  async function mutatePersonnelOption(action,category,index){
+    if(!isOwner())return; const list=state.personnelOptions[category]||[];
+    if(action==='add'){const value=prompt(`Add ${category} option:`)?.trim();if(!value||list.includes(value))return; if(state.demo){list.push(value);return renderPersonnelOptions();}const {error}=await db.from('personnel_options').insert({category,value,sort_order:list.length});if(error)return toast(error.message,'error');}
+    if(action==='rename'){const old=list[index];const value=prompt(`Rename ${old}:`,old)?.trim();if(!value||value===old)return;if(state.demo){list[index]=value;return renderPersonnelOptions();}const {error}=await db.from('personnel_options').update({value}).eq('category',category).eq('value',old);if(error)return toast(error.message,'error');}
+    if(action==='remove'){const old=list[index];if(!confirm(`Remove "${old}" from ${category} options? Existing profiles keep their current value until edited.`))return;if(state.demo){list.splice(index,1);return renderPersonnelOptions();}const {error}=await db.from('personnel_options').delete().eq('category',category).eq('value',old);if(error)return toast(error.message,'error');}
+    await loadPersonnelOptions();renderPersonnelOptions();toast('Personnel dropdowns updated.','success');
+  }
+  async function loadPersonnelOptions(){
+    if(state.demo)return; const {data,error}=await db.from('personnel_options').select('*').order('sort_order',{ascending:true}); if(error){console.warn(error);return;} const out={rank:[],pathway:[],class:[]}; (data||[]).forEach(x=>out[x.category]?.push(x.value)); if(out.rank.length)state.personnelOptions=out;
   }
 
   function saveLocalDirectory() {
