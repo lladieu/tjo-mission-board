@@ -92,6 +92,7 @@ button { cursor: pointer; }
 
   
 .directory-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.directory-card{background:linear-gradient(145deg,rgba(12,31,47,.92),rgba(4,14,23,.88));border:1px solid var(--line);padding:22px;box-shadow:var(--shadow),inset 0 0 45px rgba(38,156,211,.035);position:relative}.directory-head{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:8px}.directory-head h3{font:700 16px Orbitron;margin:6px 0}.directory-head p{color:var(--muted);font-size:12px;margin:5px 0 0}.directory-list{display:flex;flex-direction:column}.directory-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line)}.directory-row:last-child{border-bottom:0}.directory-row span{font-size:14px}.directory-row b{font:8px Orbitron;color:var(--muted);margin-right:13px}.planet-card{margin-top:16px}.planet-card .directory-list{display:grid;grid-template-columns:repeat(2,1fr);column-gap:28px}.planet-card .directory-row{padding:10px 2px}@media(max-width:850px){.directory-grid{grid-template-columns:1fr}.planet-card .directory-list{grid-template-columns:1fr}.directory-head{align-items:flex-start;flex-direction:column}}
+.auth-form{display:flex;flex-direction:column;gap:13px;text-align:left}.auth-form .field{margin:0}.auth-switch{margin-top:16px;text-align:center;color:var(--muted);font-size:12px}.text-btn{border:0;background:transparent;color:var(--cyan);font:700 10px Orbitron;letter-spacing:.08em;padding:0;text-transform:uppercase}.text-btn:hover{text-decoration:underline}.auth-form .field input{width:100%}
 </style>
 </head>
 <body>
@@ -130,8 +131,13 @@ button { cursor: pointer; }
         <div class="eyebrow">JEDI ORDER AUTHENTICATION NETWORK</div>
         <h1>MISSION TERMINAL</h1>
         <p class="auth-copy">Authorized Jedi personnel may access active operations, submit mission requests, and review their service record.</p>
-        <button class="primary-btn large" id="discordLoginBtn"><span>◆</span> AUTHENTICATE WITH DISCORD</button>
-        <div class="auth-note"><span>◉</span> Discord authentication required. No Jedi credentials are stored by this terminal.</div>
+        <form id="authForm" class="auth-form">
+          <div class="field"><label for="authEmail">JEDI ACCOUNT EMAIL</label><input id="authEmail" name="email" type="email" autocomplete="email" required placeholder="name@domain.com"></div>
+          <div class="field"><label for="authPassword">ACCESS CODE</label><input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="••••••••"></div>
+          <button class="primary-btn large" id="authSubmit" type="submit"><span>◆</span> AUTHENTICATE</button>
+        </form>
+        <div class="auth-switch"><span id="authSwitchText">New Jedi personnel?</span> <button type="button" class="text-btn" id="authModeBtn">CREATE ACCOUNT</button></div>
+        <div class="auth-note"><span>◉</span> Secure email authentication. Personnel credentials are handled by the Jedi Order authentication network.</div>
         <div class="demo-note hidden" id="demoNote">DEMO MODE — Connect Supabase to enable live authentication and data.</div>
       </div>
     </section>
@@ -451,7 +457,7 @@ button { cursor: pointer; }
       loadLocalDirectory();
       setUser({...demoUser});
       $('#demoNote')?.classList.remove('hidden');
-      $('#discordLoginBtn').textContent='◆ ENTER DEMO TERMINAL';
+      $('#authSubmit').innerHTML='<span>◆</span> ENTER DEMO TERMINAL';
       updateNotificationBadge();
       return;
     }
@@ -489,10 +495,35 @@ button { cursor: pointer; }
     if(!state.demo && state.user) await db.from('notifications').update({read:true}).eq('user_id',state.user.id).eq('read',false);
   }
 
-  async function signIn() {
+  let authMode = 'login';
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    const register = mode === 'register';
+    $('#authSubmit').innerHTML = `<span>◆</span> ${register ? 'CREATE PERSONNEL ACCOUNT' : 'AUTHENTICATE'}`;
+    $('#authPassword').autocomplete = register ? 'new-password' : 'current-password';
+    $('#authSwitchText').textContent = register ? 'Already registered?' : 'New Jedi personnel?';
+    $('#authModeBtn').textContent = register ? 'RETURN TO LOGIN' : 'CREATE ACCOUNT';
+    $('#authForm').reset();
+    const note = $('.auth-note');
+    if(note) note.innerHTML = register ? '<span>◉</span> Create a secure personnel account. You will complete your Jedi personnel record after authentication.' : '<span>◉</span> Secure email authentication. Personnel credentials are handled by the Jedi Order authentication network.';
+  }
+
+  async function handleAuthSubmit(e) {
+    e.preventDefault();
+    const email = $('#authEmail').value.trim();
+    const password = $('#authPassword').value;
     if(state.demo) { setUser({...demoUser}); showView('dashboard'); toast('Demo terminal authenticated.','success'); return; }
-    const {error}=await db.auth.signInWithOAuth({provider:'discord',options:{redirectTo:window.location.href}});
-    if(error) toast(error.message,'error');
+    if(authMode === 'register') {
+      const {data,error}=await db.auth.signUp({email,password});
+      if(error) return toast(error.message,'error');
+      if(data.session) { toast('Personnel account created. Complete your Jedi record.','success'); await fetchAll(); showView('dashboard'); }
+      else toast('Account created. Check your email to confirm access, then return to the terminal.','success');
+    } else {
+      const {error}=await db.auth.signInWithPassword({email,password});
+      if(error) return toast(error.message,'error');
+      toast('Authentication accepted.','success');
+    }
   }
 
   async function signOut() {
@@ -735,7 +766,8 @@ button { cursor: pointer; }
       const nav=e.target.closest('[data-view]'); if(nav){e.preventDefault();showView(nav.dataset.view);return;}
       const card=e.target.closest('[data-mission-id]'); if(card){state.currentMission=state.missions.find(m=>m.id===card.dataset.missionId);showView('mission');return;}
     });
-    $('#discordLoginBtn').onclick=signIn;
+    $('#authForm').onsubmit=handleAuthSubmit;
+    $('#authModeBtn').onclick=()=>setAuthMode(authMode==='login'?'register':'login');
     $('#notificationBtn').onclick=()=>{$('#notificationPanel').classList.remove('hidden');renderNotifications();markNotificationsRead();};
     $('#closeNotifications').onclick=()=>$('#notificationPanel').classList.add('hidden');
     $('#userChip').onclick=()=>state.user&&showView('profile');
