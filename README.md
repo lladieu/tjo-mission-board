@@ -215,3 +215,6 @@ Subcategories can be added, renamed, or removed. Planets can be added or removed
 
 ## v9 moderation upgrade
 Run `upgrade-v9.sql` once in Supabase SQL Editor. Then upload the v9 `index.html` to the root of the existing GitHub Pages repository. The Owner gets Administration -> NAME FILTER. The database rejects prohibited Character Name, Roblox User, and Discord User values even if a user bypasses the frontend.
+
+## v10 upgrade
+Run `upgrade-v10.sql` once in Supabase SQL Editor, then replace the live GitHub `index.html` with this version. v10 adds the Bulletin, Mission Board, and Service Records top-level tabs; announcements automatically create notifications for every player; and Service Records ranks personnel by approved mission participation.

@@ -93,6 +93,11 @@ button { cursor: pointer; }
   
 .directory-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.directory-card{background:linear-gradient(145deg,rgba(12,31,47,.92),rgba(4,14,23,.88));border:1px solid var(--line);padding:22px;box-shadow:var(--shadow),inset 0 0 45px rgba(38,156,211,.035);position:relative}.directory-head{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:8px}.directory-head h3{font:700 16px Orbitron;margin:6px 0}.directory-head p{color:var(--muted);font-size:12px;margin:5px 0 0}.directory-list{display:flex;flex-direction:column}.directory-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line)}.directory-row:last-child{border-bottom:0}.directory-row span{font-size:14px}.directory-row b{font:8px Orbitron;color:var(--muted);margin-right:13px}.planet-card{margin-top:16px}.planet-card .directory-list{display:grid;grid-template-columns:repeat(2,1fr);column-gap:28px}.planet-card .directory-row{padding:10px 2px}@media(max-width:850px){.directory-grid{grid-template-columns:1fr}.planet-card .directory-list{grid-template-columns:1fr}.directory-head{align-items:flex-start;flex-direction:column}}
 .auth-form{display:flex;flex-direction:column;gap:13px;text-align:left}.auth-form .field{margin:0}.auth-switch{margin-top:16px;text-align:center;color:var(--muted);font-size:12px}.text-btn{border:0;background:transparent;color:var(--cyan);font:700 10px Orbitron;letter-spacing:.08em;padding:0;text-transform:uppercase}.text-btn:hover{text-decoration:underline}.auth-form .field input{width:100%}
+
+.site-nav{position:sticky;top:70px;z-index:19;display:flex;justify-content:center;gap:8px;padding:10px 18px;background:rgba(3,11,18,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+.site-nav .nav-tab{border:1px solid var(--line);background:rgba(10,29,43,.72);color:var(--muted);padding:10px 18px;font:700 10px Orbitron;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:.16s}.site-nav .nav-tab:hover,.site-nav .nav-tab.active{color:var(--cyan);border-color:var(--line-strong);box-shadow:inset 0 0 18px rgba(126,223,255,.06)}
+.bulletin-list{display:grid;gap:14px}.bulletin-card{padding:22px}.bulletin-card h3{font:700 17px Orbitron;margin:7px 0 10px}.bulletin-meta{font:9px Orbitron;color:#668398;letter-spacing:.08em;margin-top:14px}.leaderboard-rank{font:700 15px Orbitron;color:var(--cyan)}
+@media(max-width:760px){.site-nav{top:70px;justify-content:flex-start;overflow:auto;padding:8px 12px}.site-nav .nav-tab{white-space:nowrap;padding:9px 13px}}
 </style>
 </head>
 <body>
@@ -124,6 +129,12 @@ button { cursor: pointer; }
     </div>
   </header>
 
+  <nav class="site-nav hidden" id="siteNav">
+    <button class="nav-tab" data-view="bulletin">BULLETIN</button>
+    <button class="nav-tab active" data-view="dashboard">MISSION BOARD</button>
+    <button class="nav-tab" data-view="service">SERVICE RECORD</button>
+  </nav>
+
   <main id="app" class="app-shell">
     <section id="authView" class="auth-view">
       <div class="auth-panel holo-panel">
@@ -140,6 +151,16 @@ button { cursor: pointer; }
         <div class="auth-note"><span>◉</span> Secure email authentication. Personnel credentials are handled by the Jedi Order authentication network.</div>
         <div class="demo-note hidden" id="demoNote">DEMO MODE — Connect Supabase to enable live authentication and data.</div>
       </div>
+    </section>
+
+    <section id="bulletinView" class="page-view hidden">
+      <div class="page-heading"><div><span class="eyebrow">JEDI ORDER // COMMAND CHANNEL</span><h1>BULLETIN</h1><p class="subhead">Official announcements issued by Jedi Command.</p></div></div>
+      <div id="bulletinList" class="bulletin-list"></div>
+    </section>
+
+    <section id="serviceView" class="page-view hidden">
+      <div class="page-heading"><div><span class="eyebrow">JEDI ORDER // PERSONNEL ARCHIVE</span><h1>SERVICE RECORDS</h1><p class="subhead">Operational ranking of active Jedi personnel by approved mission participation.</p></div></div>
+      <div id="serviceLeaderboard"></div>
     </section>
 
     <section id="dashboardView" class="page-view hidden">
@@ -225,7 +246,7 @@ button { cursor: pointer; }
   <div id="modalRoot"></div>
 
   <footer class="footer">
-    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.2</span>
+    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.3</span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -271,6 +292,7 @@ button { cursor: pointer; }
     notifications: [],
     profiles: [],
     announcements: [],
+    leaderboard: [],
     settings: {terminal_name:'MISSION TERMINAL', command_name:'JEDI ORDER // OPERATIONS COMMAND', footer_text:'SECURE • AUTHORIZED PERSONNEL ONLY', system_status:'SECURE CHANNEL'},
     personnelOptions: {rank:['Padawan','Knight','Master'], pathway:['Guardian','Consular','Sentinel','None'], class:['Weapon Master','Battlemaster','Instructor','Investigator','Shadow','Lorekeeper','Sage','Minor Council','High Council','Master of the Order','Grandmaster of the Order','None']},
     blockedTerms: [],
@@ -310,6 +332,7 @@ button { cursor: pointer; }
 
   function setUser(user) {
     state.user = user;
+    $('#siteNav')?.classList.toggle('hidden', !user);
     $('#topUserName').textContent = user ? (user.character_name || user.discord_user || 'JEDI') : 'UNAUTHENTICATED';
     $('#topUserRole').textContent = user ? roleLabel(user.role) : 'VIEWER';
     $('.avatar').textContent = user ? initials(user.character_name || user.discord_user) : 'J';
@@ -326,9 +349,12 @@ button { cursor: pointer; }
     $$('.page-view, #authView').forEach(x => x.classList.add('hidden'));
     const target = view === 'auth' ? $('#authView') : $(`#${view}View`);
     if(target) target.classList.remove('hidden');
+    $$('#siteNav .nav-tab').forEach(b=>b.classList.toggle('active', (view==='operations'||view==='mission') ? b.dataset.view==='dashboard' : b.dataset.view===view));
+    if(view === 'bulletin') renderBulletin();
     if(view === 'dashboard') renderDashboard();
     if(view === 'operations') renderOperations();
     if(view === 'mission') renderMissionDetail();
+    if(view === 'service') renderServiceLeaderboard();
     if(view === 'profile') renderProfile();
     if(view === 'admin') renderAdmin();
   }
@@ -355,6 +381,16 @@ button { cursor: pointer; }
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px"><span>${esc(m.main_category)} // ${esc(m.type)}</span><span>${full?'FULL':'VIEW BRIEFING →'}</span></div>
     </article>`;
+  }
+
+  function renderBulletin() {
+    const items=[...state.announcements].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    $('#bulletinList').innerHTML = items.length ? items.map(a=>`<article class="holo-panel bulletin-card"><span class="eyebrow">COMMAND BULLETIN</span><h3>${esc(a.title)}</h3><p style="color:var(--muted);line-height:1.65;white-space:pre-wrap">${esc(a.body)}</p><div class="bulletin-meta">TRANSMITTED ${esc(dateFmt(a.created_at))}</div></article>`).join('') : `<div class="empty"><strong>NO ACTIVE BULLETINS</strong>Command has not issued any announcements.</div>`;
+  }
+
+  function renderServiceLeaderboard() {
+    const rows=state.leaderboard||[];
+    $('#serviceLeaderboard').innerHTML=`<div class="admin-card">${rows.length?`<table class="admin-table"><thead><tr><th>POSITION</th><th>CHARACTER</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>MISSIONS</th></tr></thead><tbody>${rows.map((p,i)=>`<tr><td><span class="leaderboard-rank">#${i+1}</span></td><td>${esc(p.character_name||'Unnamed Jedi')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td><strong>${Number(p.mission_count||0)}</strong></td></tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE RECORDS</strong>Personnel will appear after their records are established.</div>`}</div>`;
   }
 
   function renderDashboard() {
@@ -473,6 +509,7 @@ button { cursor: pointer; }
         {id:'a3',mission_id:'m2',user_id:'other-user2',status:'approved',character_name:'Jedi Guardian Sera',rank:'Jedi Guardian'},
         {id:'a4',mission_id:'m3',user_id:'other-user3',status:'approved',character_name:'Jedi Consular Aryn',rank:'Jedi Consular'}
       ];
+      state.leaderboard=[{character_name:demoUser.character_name,rank:demoUser.rank,pathway:demoUser.pathway,class:demoUser.class,mission_count:1},{character_name:'Jedi Knight Varek',rank:'Knight',pathway:'Guardian',class:'Weapon Master',mission_count:1}];
       state.notifications = [{id:'n1',title:'MISSION TERMINAL ONLINE',body:'Demo mode is active. Connect Supabase to enable live personnel records.',read:false,created_at:new Date().toISOString()}];
       loadLocalDirectory();
       setUser({...demoUser});
@@ -487,7 +524,7 @@ button { cursor: pointer; }
     const profile = await getProfile(user.id);
     setUser(profile);
     await Promise.all([loadMissions(), loadDirectory(), loadApplications(), loadNotifications()]);
-    await loadAnnouncements();
+    await Promise.all([loadAnnouncements(), loadLeaderboard()]);
     await loadSettings();
     await loadPersonnelOptions();
     await loadBlockedTerms();
@@ -506,6 +543,7 @@ button { cursor: pointer; }
   }
   async function loadNotifications() { const {data,error}=await db.from('notifications').select('*').order('created_at',{ascending:false}).limit(30); if(error) throw error; state.notifications=data||[]; updateNotificationBadge(); }
   async function loadAnnouncements() { const {data}=await db.from('announcements').select('*').order('created_at',{ascending:false}); state.announcements=data||[]; }
+  async function loadLeaderboard() { const {data,error}=await db.rpc('get_service_leaderboard'); if(error){console.warn(error);state.leaderboard=[];return;} state.leaderboard=data||[]; }
 
   function updateNotificationBadge() { const n=state.notifications.filter(x=>!x.read).length; $('#notifCount').textContent=n; $('#notifCount').classList.toggle('hidden',!n); }
   function renderNotifications() {
@@ -835,7 +873,7 @@ button { cursor: pointer; }
   function openAnnouncementModal(){
     $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>POST ANNOUNCEMENT</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required></div><div class="field full"><label>MESSAGE</label><textarea name="body" required></textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">PUBLISH</button></div></form></div></div>`;
     $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
-    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){state.announcements.unshift({id:`a-${Date.now()}`,...data,created_at:new Date().toISOString()});$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');return;}const {error}=await db.from('announcements').insert({...data,created_by:state.user.id});if(error)return toast(error.message,'error');await loadAnnouncements();$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');};
+    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){state.announcements.unshift({id:`a-${Date.now()}`,...data,created_at:new Date().toISOString()});state.notifications.unshift({id:`n-${Date.now()}`,title:`COMMAND BULLETIN: ${data.title}`,body:data.body,read:false,created_at:new Date().toISOString()});updateNotificationBadge();$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published and personnel notified.','success');return;}const {error}=await db.from('announcements').insert({...data,created_by:state.user.id});if(error)return toast(error.message,'error');await Promise.all([loadAnnouncements(),loadNotifications()]);$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published and personnel notified.','success');};
   }
 
   function bindEvents() {
