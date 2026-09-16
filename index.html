@@ -211,6 +211,7 @@ button { cursor: pointer; }
         <button class="tab" data-admin-tab="settings">SETTINGS</button>
         <button class="tab" data-admin-tab="directory">DIRECTORY</button>
         <button class="tab owner-only-tab hidden" data-admin-tab="personnel_options">PERSONNEL OPTIONS</button>
+        <button class="tab owner-only-tab hidden" data-admin-tab="name_filter">NAME FILTER</button>
       </div>
       <div id="adminContent"></div>
     </section>
@@ -224,7 +225,7 @@ button { cursor: pointer; }
   <div id="modalRoot"></div>
 
   <footer class="footer">
-    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.1</span>
+    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.2</span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -272,6 +273,7 @@ button { cursor: pointer; }
     announcements: [],
     settings: {terminal_name:'MISSION TERMINAL', command_name:'JEDI ORDER // OPERATIONS COMMAND', footer_text:'SECURE • AUTHORIZED PERSONNEL ONLY', system_status:'SECURE CHANNEL'},
     personnelOptions: {rank:['Padawan','Knight','Master'], pathway:['Guardian','Consular','Sentinel','None'], class:['Weapon Master','Battlemaster','Instructor','Investigator','Shadow','Lorekeeper','Sage','Minor Council','High Council','Master of the Order','Grandmaster of the Order','None']},
+    blockedTerms: [],
     missionTypes: {WARFRONT:[...DEFAULT_MISSION_TYPES.WARFRONT], JEDI:[...DEFAULT_MISSION_TYPES.JEDI]},
     planets: [...DEFAULT_PLANETS],
     currentMission: null,
@@ -488,6 +490,7 @@ button { cursor: pointer; }
     await loadAnnouncements();
     await loadSettings();
     await loadPersonnelOptions();
+    await loadBlockedTerms();
     applySettings();
     await ensureProfileComplete();
   }
@@ -625,6 +628,7 @@ button { cursor: pointer; }
     if(state.adminTab==='settings') renderAdminSettings();
     if(state.adminTab==='directory') renderAdminDirectory();
     if(state.adminTab==='personnel_options') renderPersonnelOptions();
+    if(state.adminTab==='name_filter') renderNameFilter();
   }
   function renderAdminMissions(){
     $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CODE</th><th>MISSION</th><th>CATEGORY</th><th>THREAT</th><th>DATE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${state.missions.map(m=>`<tr><td>${esc(m.code)}</td><td>${esc(m.name)}</td><td>${esc(m.main_category)}</td><td>${esc(m.threat_level)}</td><td>${esc(dateFmt(m.date))}</td><td>${esc(m.status)}</td><td><div class="admin-actions"><button class="mini-btn" data-edit="${esc(m.id)}">EDIT</button><button class="mini-btn" data-open="${esc(m.id)}">VIEW</button><button class="mini-btn danger" data-delete="${esc(m.id)}">DELETE</button></div></td></tr>`).join('')}</tbody></table></div>`;
@@ -650,6 +654,39 @@ button { cursor: pointer; }
     const s=state.settings;
     $('#adminContent').innerHTML=`<div class="admin-card"><div class="eyebrow">TERMINAL CONFIGURATION</div><h3 style="font:700 16px Orbitron;margin:6px 0 18px">WEBSITE SETTINGS</h3><form id="settingsForm"><div class="form-grid"><div class="field"><label>TERMINAL NAME</label><input name="terminal_name" value="${esc(s.terminal_name||'MISSION TERMINAL')}"></div><div class="field"><label>COMMAND DESIGNATION</label><input name="command_name" value="${esc(s.command_name||'JEDI ORDER // OPERATIONS COMMAND')}"></div><div class="field"><label>SYSTEM STATUS LABEL</label><input name="system_status" value="${esc(s.system_status||'SECURE CHANNEL')}"></div><div class="field"><label>FOOTER NOTICE</label><input name="footer_text" value="${esc(s.footer_text||'SECURE • AUTHORIZED PERSONNEL ONLY')}"></div></div><div class="modal-actions"><button class="primary-btn">SAVE TERMINAL SETTINGS</button></div></form></div>`;
     $('#settingsForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');return;}const {error}=await db.from('site_settings').update(patch).eq('id',1);if(error)return toast(error.message,'error');Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');};
+  }
+
+
+  async function loadBlockedTerms(){
+    if(state.demo){ state.blockedTerms=[]; return; }
+    const {data,error}=await db.from('blocked_terms').select('*').order('term',{ascending:true});
+    if(error){ console.warn(error); return; }
+    state.blockedTerms=data||[];
+  }
+
+  function renderNameFilter(){
+    if(!isOwner()){state.adminTab='missions';return renderAdmin();}
+    const rows=state.blockedTerms.length ? state.blockedTerms.map(x=>`<div class="directory-row"><span>${esc(x.term)}</span><div class="admin-actions"><button class="mini-btn danger" data-remove-blocked="${esc(x.id)}">REMOVE</button></div></div>`).join('') : '<div class="empty">No custom blocked terms are configured.</div>';
+    $('#adminContent').innerHTML=`<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">OWNER AUTHORITY // PERSONNEL MODERATION</span><h3>NAME FILTER</h3><p>Blocks prohibited terms in Character Name, Roblox User, and Discord User. Matching ignores spaces, punctuation, repeated letters, and common number/symbol substitutions. Database enforcement prevents bypassing the website.</p></div><button class="primary-btn" id="addBlockedTermBtn">+ ADD BLOCKED TERM</button></div><div class="auth-note" style="margin-bottom:14px">The terminal rejects a personnel record with a generic naming-standards message. Avoid very short terms because they can appear inside legitimate names.</div><div class="directory-list">${rows}</div></div>`;
+    $('#addBlockedTermBtn').onclick=addBlockedTerm;
+    $$('[data-remove-blocked]').forEach(b=>b.onclick=()=>removeBlockedTerm(b.dataset.removeBlocked));
+  }
+
+  async function addBlockedTerm(){
+    if(!isOwner())return;
+    const term=prompt('Add a blocked term. Use the normal spelling; the filter also catches common evasions:')?.trim();
+    if(!term)return;
+    if(term.replace(/[^a-z0-9]/gi,'').length<4)return toast('Blocked terms must contain at least 4 letters/numbers to reduce false positives.','error');
+    const {error}=await db.from('blocked_terms').insert({term});
+    if(error)return toast(error.message,'error');
+    await loadBlockedTerms(); renderNameFilter(); toast('Blocked term added.','success');
+  }
+
+  async function removeBlockedTerm(id){
+    if(!isOwner()||!confirm('Remove this term from the personnel name filter?'))return;
+    const {error}=await db.from('blocked_terms').delete().eq('id',id);
+    if(error)return toast(error.message,'error');
+    await loadBlockedTerms(); renderNameFilter(); toast('Blocked term removed.','success');
   }
 
   function renderPersonnelOptions(){

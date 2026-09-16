@@ -212,3 +212,6 @@ Command Staff now have a **DIRECTORY** tab under Administration. It manages:
 - The planetary roster used by mission creation
 
 Subcategories can be added, renamed, or removed. Planets can be added or removed. The live Supabase schema includes `mission_types` and `planets` tables plus Command Staff RLS policies. Existing active missions prevent removal of a subcategory or planet when the roster item is in use.
+
+## v9 moderation upgrade
+Run `upgrade-v9.sql` once in Supabase SQL Editor. Then upload the v9 `index.html` to the root of the existing GitHub Pages repository. The Owner gets Administration -> NAME FILTER. The database rejects prohibited Character Name, Roblox User, and Discord User values even if a user bypasses the frontend.
