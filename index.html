@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07111c" />
+  <title>Jedi Order Mission Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg: #050b12;
+  --bg2: #081522;
+  --panel: rgba(8, 20, 32, .88);
+  --panel2: rgba(11, 28, 44, .72);
+  --line: rgba(112, 188, 236, .23);
+  --line-strong: rgba(105, 213, 255, .58);
+  --cyan: #7edfff;
+  --cyan2: #2ca9e8;
+  --blue: #4d8dff;
+  --gold: #e7c77a;
+  --text: #e8f4ff;
+  --muted: #8ca9bd;
+  --danger: #ff657c;
+  --warn: #f4bf59;
+  --success: #65e6ae;
+  --shadow: 0 20px 60px rgba(0,0,0,.42);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at 60% 0%, #0e263b 0%, var(--bg) 45%, #02060a 100%); color: var(--text); font-family: Rajdhani, system-ui, sans-serif; }
+body { min-height: 100vh; overflow-x: hidden; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+.hidden { display: none !important; }
+.scanlines { pointer-events:none; position:fixed; inset:0; z-index:20; opacity:.06; background:repeating-linear-gradient(0deg, transparent 0 3px, #fff 4px, transparent 5px); mix-blend-mode:screen; }
+.stars { position:fixed; inset:0; pointer-events:none; opacity:.22; background-image:radial-gradient(circle, #fff 0 1px, transparent 1.4px); background-size:73px 73px; }
+.stars-b { opacity:.1; transform:scale(1.7) rotate(17deg); }
+.topbar { position:sticky; top:0; z-index:10; height:76px; display:flex; align-items:center; justify-content:space-between; padding:0 28px; border-bottom:1px solid var(--line); background:rgba(4,11,18,.88); backdrop-filter:blur(16px); box-shadow:0 8px 35px rgba(0,0,0,.3); }
+.brand { display:flex; gap:13px; align-items:center; cursor:pointer; }
+.brand-mark { width:40px; height:40px; position:relative; display:grid; place-items:center; border:1px solid var(--line-strong); transform:rotate(45deg); box-shadow:0 0 20px rgba(86,205,255,.15); }
+.brand-mark:before, .brand-mark:after { content:""; position:absolute; background:var(--cyan); opacity:.7; }
+.brand-mark:before { width:22px; height:1px; }
+.brand-mark:after { width:1px; height:22px; }
+.brand-mark span { position:absolute; width:6px; height:6px; border:1px solid var(--cyan); }
+.brand-mark span:nth-child(1){top:5px;left:5px}.brand-mark span:nth-child(2){bottom:5px;right:5px}.brand-mark span:nth-child(3){top:17px;left:17px;background:var(--cyan)}
+.brand-title { font-family:Orbitron,sans-serif; font-size:16px; font-weight:800; letter-spacing:.12em; }
+.eyebrow { font-family:Orbitron,sans-serif; font-size:9px; letter-spacing:.18em; color:var(--cyan); opacity:.82; }
+.top-status { display:flex; align-items:center; gap:20px; }
+.system-status,.gstd { font-family:Orbitron,sans-serif; font-size:10px; letter-spacing:.08em; color:var(--muted); }
+.status-dot { display:inline-block; width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success);margin-right:6px; }
+.icon-btn,.close-btn { border:1px solid var(--line); background:rgba(15,33,49,.7); color:var(--text); width:36px;height:36px; border-radius:6px; position:relative; }
+.icon-btn:hover,.close-btn:hover { border-color:var(--line-strong); color:var(--cyan); }
+.bell { font-size:15px; }
+.notif-count { position:absolute; top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:10px;background:var(--danger);color:#fff;font:700 9px/16px Orbitron;text-align:center; }
+.user-chip { display:flex;align-items:center;gap:9px;border-left:1px solid var(--line);padding-left:16px;min-width:150px; }
+.avatar { width:31px;height:31px;border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--cyan);font-family:Orbitron;background:rgba(38,107,145,.18); }
+.user-chip-text { display:flex;flex-direction:column;line-height:1.1; }.user-chip-text strong{font-size:13px}.user-chip-text small{font:8px Orbitron;color:var(--muted);letter-spacing:.12em;margin-top:4px}
+.app-shell { width:min(1400px, calc(100% - 48px)); margin:0 auto; padding:44px 0 90px; position:relative; z-index:1; }
+.page-view { animation:fadeIn .25s ease; } @keyframes fadeIn {from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.auth-view { min-height:calc(100vh - 160px); display:grid;place-items:center; }
+.auth-panel { width:min(570px,100%); padding:52px; text-align:center; }
+.holo-panel,.mission-card,.detail-panel,.profile-card,.admin-card,.priority-strip,.side-panel { background:linear-gradient(145deg,rgba(12,31,47,.92),rgba(4,14,23,.88)); border:1px solid var(--line); box-shadow:var(--shadow), inset 0 0 45px rgba(38,156,211,.035); position:relative; overflow:hidden; }
+.holo-panel:before,.mission-card:before,.detail-panel:before,.profile-card:before,.admin-card:before { content:""; position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,rgba(126,223,255,.05),transparent 28%,transparent 70%,rgba(126,223,255,.03)); }
+.auth-sigil { width:74px;height:74px;margin:0 auto 22px;border:1px solid var(--line-strong);display:grid;place-items:center;font-size:33px;color:var(--cyan);transform:rotate(45deg);box-shadow:0 0 35px rgba(54,184,239,.12); }.auth-sigil::first-letter{transform:rotate(-45deg)}
+.auth-panel h1,.hero-row h1,.page-heading h1 { margin:10px 0 6px;font:800 clamp(30px,4vw,48px)/1 Orbitron;letter-spacing:.05em; }
+.auth-copy,.subhead { color:var(--muted);font-size:17px;line-height:1.45;max-width:650px; }
+.auth-copy { margin:0 auto 28px; }
+.auth-note,.demo-note { margin-top:16px;color:var(--muted);font-size:12px; }.auth-note span{color:var(--cyan)}.demo-note{color:var(--warn)}
+.primary-btn,.ghost-btn,.danger-btn,.back-btn { border:1px solid var(--line-strong); padding:11px 16px; border-radius:4px; color:var(--text); background:linear-gradient(180deg,rgba(31,114,155,.35),rgba(10,46,69,.55)); font:700 11px Orbitron;letter-spacing:.08em;text-transform:uppercase;transition:.18s; }
+.primary-btn:hover { transform:translateY(-1px);box-shadow:0 0 22px rgba(65,196,244,.16);border-color:var(--cyan); }.primary-btn.large{width:100%;padding:15px}.primary-btn span{color:var(--cyan);margin-right:7px}
+.ghost-btn,.back-btn { background:transparent;border-color:var(--line); }.ghost-btn:hover,.back-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.danger-btn{background:rgba(121,18,40,.25);border-color:rgba(255,101,124,.45);color:#ff9aaa}.danger-btn:hover{border-color:var(--danger)}
+.hero-row,.page-heading { display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:28px; }.hero-row .subhead{margin:10px 0 0}.hero-readout{min-width:190px;padding:13px 15px;border-left:1px solid var(--line);border-bottom:1px solid var(--line);text-align:right}.hero-readout span,.hero-readout small{display:block;font:9px Orbitron;color:var(--muted);letter-spacing:.1em}.hero-readout strong{display:block;color:var(--success);font:700 18px Orbitron;margin:5px 0}.hero-readout small{font-size:8px}
+.priority-strip { display:flex;align-items:center;gap:16px;padding:17px 20px;margin-bottom:38px;border-color:rgba(244,191,89,.3); }.priority-strip .ghost-btn{margin-left:auto}.priority-pulse{width:9px;height:38px;background:var(--warn);box-shadow:0 0 20px rgba(244,191,89,.6);animation:pulse 1.8s infinite}.priority-strip strong{display:block;font:700 14px Orbitron;letter-spacing:.05em}.priority-strip small{display:block;color:var(--muted);margin-top:3px;font-size:12px}.priority-strip .eyebrow{color:var(--warn)}@keyframes pulse{50%{opacity:.45}}
+.section-heading { display:flex;align-items:end;justify-content:space-between;margin:0 0 14px; }.section-heading h2{font:700 19px Orbitron;margin:7px 0 0;letter-spacing:.04em}.counter{font:9px Orbitron;color:var(--muted);letter-spacing:.12em}.second-heading{margin-top:48px}
+.mission-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.mission-card{padding:19px;min-height:265px;display:flex;flex-direction:column;cursor:pointer;transition:.18s}.mission-card:hover{transform:translateY(-3px);border-color:var(--line-strong);box-shadow:var(--shadow),0 0 30px rgba(61,189,241,.09)}
+.mission-card.high{border-color:rgba(244,191,89,.38)}.mission-card.high:hover{border-color:rgba(244,191,89,.72)}
+.card-top,.detail-meta,.profile-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}.code{font:9px Orbitron;color:var(--muted);letter-spacing:.12em}.threat{font:700 9px Orbitron;letter-spacing:.08em;padding:5px 7px;border:1px solid var(--line);color:var(--cyan)}.threat.high{color:var(--warn);border-color:rgba(244,191,89,.45)}.threat.critical{color:var(--danger);border-color:rgba(255,101,124,.5);box-shadow:0 0 14px rgba(255,101,124,.08)}
+.mission-card h3{font:700 19px Orbitron;margin:18px 0 5px;line-height:1.2}.mission-card .location{color:var(--cyan);font-size:14px}.briefing-preview{color:var(--muted);font-size:13px;line-height:1.35;margin:12px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.card-footer{margin-top:auto;border-top:1px solid var(--line);padding-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.metric label{display:block;color:var(--muted);font:8px Orbitron;letter-spacing:.08em}.metric strong{display:block;font-size:12px;margin-top:3px}.slots-bar{height:3px;background:rgba(255,255,255,.07);margin-top:5px;overflow:hidden}.slots-fill{height:100%;background:var(--cyan);box-shadow:0 0 8px rgba(126,223,255,.5)}
+.category-tabs,.admin-tabs{display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:10px}.tab{background:transparent;border:1px solid transparent;color:var(--muted);padding:10px 13px;font:700 10px Orbitron;letter-spacing:.08em}.tab:hover{color:var(--text)}.tab.active{color:var(--cyan);border-color:var(--line);background:rgba(36,119,157,.1)}
+.back-btn{margin-bottom:18px}.detail-panel{padding:28px}.detail-head{display:grid;grid-template-columns:1fr auto;gap:20px;border-bottom:1px solid var(--line);padding-bottom:23px}.detail-head h1{font:800 clamp(26px,4vw,42px) Orbitron;margin:8px 0}.detail-head .location{color:var(--cyan);font-size:17px}.detail-actions{display:flex;align-items:start;gap:8px}.detail-meta{display:grid;grid-template-columns:repeat(5,1fr);margin:20px 0;padding:15px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.detail-meta div{padding:0 14px;border-right:1px solid var(--line)}.detail-meta div:last-child{border:0}.detail-meta label{display:block;color:var(--muted);font:8px Orbitron;letter-spacing:.1em}.detail-meta strong{display:block;margin-top:5px;font-size:14px}.briefing{max-width:850px}.briefing h3,.roster h3{font:700 13px Orbitron;color:var(--cyan);letter-spacing:.1em}.briefing p{white-space:pre-wrap;color:#c8d9e5;line-height:1.65;font-size:15px}.roster{margin-top:30px}.roster-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.roster-item{padding:11px;border:1px solid var(--line);background:rgba(7,22,35,.7);display:flex;justify-content:space-between}.roster-item small{color:var(--muted)}
+.profile-card,.admin-card{padding:24px}.profile-head{display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;padding-bottom:20px;border-bottom:1px solid var(--line)}.profile-avatar{width:68px;height:68px;border:1px solid var(--line-strong);display:grid;place-items:center;font:700 24px Orbitron;color:var(--cyan)}.profile-head h2{font:700 23px Orbitron;margin:0 0 5px}.profile-head p{margin:0;color:var(--muted)}.role-pill{padding:7px 9px;border:1px solid var(--line);font:9px Orbitron;color:var(--cyan)}.profile-grid{display:grid;grid-template-columns:repeat(5,1fr);margin:20px 0}.profile-grid div{padding:0 13px;border-right:1px solid var(--line)}.profile-grid div:last-child{border:0}.profile-grid label{display:block;color:var(--muted);font:8px Orbitron}.profile-grid strong{display:block;margin-top:5px}.history-table{width:100%;border-collapse:collapse}.history-table th,.history-table td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}.history-table th{font:8px Orbitron;color:var(--muted);letter-spacing:.08em}.history-table td{font-size:13px}
+.admin-card{overflow:auto}.admin-table{width:100%;border-collapse:collapse;min-width:800px}.admin-table th,.admin-table td{padding:11px;border-bottom:1px solid var(--line);text-align:left}.admin-table th{font:8px Orbitron;color:var(--muted);letter-spacing:.08em}.admin-table td{font-size:13px}.admin-actions{display:flex;gap:6px}.mini-btn{border:1px solid var(--line);background:rgba(16,42,60,.6);color:var(--text);padding:6px 8px;font:700 8px Orbitron}.mini-btn:hover{border-color:var(--cyan);color:var(--cyan)}.mini-btn.approve{color:var(--success)}.mini-btn.danger{color:#ff9aaa}
+.side-panel{position:fixed;right:20px;top:88px;width:min(390px,calc(100vw - 40px));height:calc(100vh - 108px);z-index:30;padding:20px;box-shadow:0 25px 80px rgba(0,0,0,.7);overflow:auto}.side-panel-head{display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid var(--line);padding-bottom:14px}.side-panel-head h3{margin:6px 0 0;font:700 16px Orbitron}.notification{padding:14px 4px;border-bottom:1px solid var(--line)}.notification.unread{border-left:2px solid var(--cyan);padding-left:10px}.notification strong{display:block;font-size:14px}.notification p{margin:5px 0;color:var(--muted);font-size:12px}.notification time{font:8px Orbitron;color:#668398}
+.modal-backdrop{position:fixed;inset:0;z-index:50;background:rgba(0,5,9,.78);backdrop-filter:blur(5px);display:grid;place-items:center;padding:20px}.modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:#071522;border:1px solid var(--line-strong);box-shadow:0 30px 100px rgba(0,0,0,.75);padding:25px}.modal-head{display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid var(--line);padding-bottom:15px;margin-bottom:20px}.modal h2{font:700 19px Orbitron;margin:7px 0}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field.full{grid-column:1/-1}.field label{display:block;font:8px Orbitron;color:var(--muted);letter-spacing:.1em;margin-bottom:6px}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:#04101a;color:var(--text);padding:10px 11px;outline:none;border-radius:3px}.field textarea{min-height:150px;resize:vertical}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(126,223,255,.05)}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:15px;border-top:1px solid var(--line)}
+.empty{padding:35px;text-align:center;border:1px dashed var(--line);color:var(--muted);font-size:14px}.empty strong{display:block;font:700 13px Orbitron;color:var(--cyan);margin-bottom:5px}
+.footer{position:fixed;bottom:0;left:0;right:0;z-index:9;height:30px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;background:rgba(3,9,14,.9);border-top:1px solid var(--line);color:#5c7b8f;font:7px Orbitron;letter-spacing:.08em}
+.toast{position:fixed;right:20px;bottom:48px;z-index:70;padding:12px 16px;border:1px solid var(--line-strong);background:#071923;box-shadow:0 15px 50px rgba(0,0,0,.5);font-size:13px;animation:toastIn .2s ease}@keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@media(max-width:1050px){.mission-grid{grid-template-columns:repeat(2,1fr)}.detail-meta,.profile-grid{grid-template-columns:repeat(3,1fr);gap:14px}.detail-meta div:nth-child(3n),.profile-grid div:nth-child(3n){border:0}}
+@media(max-width:760px){.topbar{height:auto;min-height:70px;padding:12px 15px;align-items:flex-start}.top-status{gap:8px}.system-status,.gstd{display:none}.user-chip{min-width:0;padding-left:8px}.user-chip-text{display:none}.app-shell{width:min(100% - 24px,1400px);padding-top:28px}.mission-grid{grid-template-columns:1fr}.hero-row,.page-heading{display:block}.hero-readout{text-align:left;margin-top:20px}.priority-strip{align-items:flex-start;flex-wrap:wrap}.priority-strip .ghost-btn{margin-left:0}.category-tabs,.admin-tabs{overflow:auto}.detail-head{grid-template-columns:1fr}.detail-meta,.profile-grid{grid-template-columns:1fr 1fr}.detail-meta div,.profile-grid div{border-right:0;border-bottom:1px solid var(--line);padding:10px 0}.roster-list{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.footer{font-size:6px}.footer span:nth-child(2){display:none}.auth-panel{padding:35px 22px}}
+
+  
+.directory-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.directory-card{background:linear-gradient(145deg,rgba(12,31,47,.92),rgba(4,14,23,.88));border:1px solid var(--line);padding:22px;box-shadow:var(--shadow),inset 0 0 45px rgba(38,156,211,.035);position:relative}.directory-head{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:8px}.directory-head h3{font:700 16px Orbitron;margin:6px 0}.directory-head p{color:var(--muted);font-size:12px;margin:5px 0 0}.directory-list{display:flex;flex-direction:column}.directory-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line)}.directory-row:last-child{border-bottom:0}.directory-row span{font-size:14px}.directory-row b{font:8px Orbitron;color:var(--muted);margin-right:13px}.planet-card{margin-top:16px}.planet-card .directory-list{display:grid;grid-template-columns:repeat(2,1fr);column-gap:28px}.planet-card .directory-row{padding:10px 2px}@media(max-width:850px){.directory-grid{grid-template-columns:1fr}.planet-card .directory-list{grid-template-columns:1fr}.directory-head{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="stars stars-a"></div>
+  <div class="stars stars-b"></div>
+
+  <header class="topbar">
+    <div class="brand" data-view="dashboard">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div>
+        <div class="eyebrow">JEDI ORDER // OPERATIONS COMMAND</div>
+        <div class="brand-title">MISSION TERMINAL</div>
+      </div>
+    </div>
+
+    <div class="top-status">
+      <div class="system-status"><span class="status-dot"></span> SECURE CHANNEL</div>
+      <div class="gstd" id="gstdClock">GSTD --:--</div>
+      <button class="icon-btn" id="notificationBtn" title="Notifications" aria-label="Notifications">
+        <span class="bell">◈</span><span class="notif-count hidden" id="notifCount">0</span>
+      </button>
+      <div class="user-chip" id="userChip">
+        <div class="avatar">J</div>
+        <div class="user-chip-text"><strong id="topUserName">UNAUTHENTICATED</strong><small id="topUserRole">VIEWER</small></div>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="app-shell">
+    <section id="authView" class="auth-view">
+      <div class="auth-panel holo-panel">
+        <div class="auth-sigil">✦</div>
+        <div class="eyebrow">JEDI ORDER AUTHENTICATION NETWORK</div>
+        <h1>MISSION TERMINAL</h1>
+        <p class="auth-copy">Authorized Jedi personnel may access active operations, submit mission requests, and review their service record.</p>
+        <button class="primary-btn large" id="discordLoginBtn"><span>◆</span> AUTHENTICATE WITH DISCORD</button>
+        <div class="auth-note"><span>◉</span> Discord authentication required. No Jedi credentials are stored by this terminal.</div>
+        <div class="demo-note hidden" id="demoNote">DEMO MODE — Connect Supabase to enable live authentication and data.</div>
+      </div>
+    </section>
+
+    <section id="dashboardView" class="page-view hidden">
+      <div class="hero-row">
+        <div>
+          <div class="eyebrow">JEDI ORDER MISSION COMMAND</div>
+          <h1>ACTIVE OPERATIONS</h1>
+          <p class="subhead">Select an operation to review its briefing and request assignment.</p>
+        </div>
+        <div class="hero-readout">
+          <span>THREAT INDEX</span>
+          <strong id="threatIndex">STABLE</strong>
+          <small id="activeMissionCount">-- ACTIVE OPERATIONS</small>
+        </div>
+      </div>
+
+      <div class="priority-strip">
+        <div class="priority-pulse"></div>
+        <div>
+          <span class="eyebrow">COMMAND PRIORITY</span>
+          <strong>HIGH-RISK OPERATIONS</strong>
+          <small>These operations require immediate attention from available personnel.</small>
+        </div>
+        <button class="ghost-btn" data-view="operations">VIEW ALL OPERATIONS →</button>
+      </div>
+
+      <div class="section-heading">
+        <div><span class="eyebrow">PRIORITY CHANNEL</span><h2>HIGH-RISK OPERATIONS</h2></div>
+        <span class="counter" id="highRiskCounter">0 LISTED</span>
+      </div>
+      <div id="highRiskGrid" class="mission-grid"></div>
+
+      <div class="section-heading second-heading">
+        <div><span class="eyebrow">STANDARD CHANNEL</span><h2>ALL OTHER OPERATIONS</h2></div>
+        <span class="counter" id="standardCounter">0 LISTED</span>
+      </div>
+      <div id="standardGrid" class="mission-grid"></div>
+    </section>
+
+    <section id="operationsView" class="page-view hidden">
+      <div class="page-heading">
+        <div><span class="eyebrow">MISSION CATALOG</span><h1>OPERATIONS BOARD</h1><p class="subhead">All currently posted Jedi Order operations.</p></div>
+      </div>
+      <div class="category-tabs" id="categoryTabs">
+        <button class="tab active" data-category="ALL">ALL OPERATIONS</button>
+        <button class="tab" data-category="WARFRONT">WARFRONT OPERATIONS</button>
+        <button class="tab" data-category="JEDI">JEDI OPERATIONS</button>
+      </div>
+      <div id="operationsGrid" class="mission-grid"></div>
+    </section>
+
+    <section id="missionView" class="page-view hidden">
+      <button class="back-btn" id="backToOperations">← RETURN TO OPERATIONS</button>
+      <div id="missionDetail"></div>
+    </section>
+
+    <section id="profileView" class="page-view hidden">
+      <div class="page-heading"><div><span class="eyebrow">PERSONNEL RECORD</span><h1>SERVICE RECORD</h1><p class="subhead">Your Jedi Order operational history.</p></div></div>
+      <div id="profilePanel"></div>
+    </section>
+
+    <section id="adminView" class="page-view hidden">
+      <div class="page-heading"><div><span class="eyebrow">COMMAND AUTHORITY</span><h1>ADMINISTRATION</h1><p class="subhead">Manage mission postings, personnel assignments, announcements, and records.</p></div><button class="primary-btn" id="newMissionBtn">+ NEW MISSION</button></div>
+      <div class="admin-tabs">
+        <button class="tab active" data-admin-tab="missions">MISSIONS</button>
+        <button class="tab" data-admin-tab="applications">APPLICATIONS</button>
+        <button class="tab" data-admin-tab="personnel">PERSONNEL</button>
+        <button class="tab" data-admin-tab="announcements">ANNOUNCEMENTS</button>
+        <button class="tab" data-admin-tab="settings">SETTINGS</button>
+        <button class="tab" data-admin-tab="directory">DIRECTORY</button>
+      </div>
+      <div id="adminContent"></div>
+    </section>
+  </main>
+
+  <div id="notificationPanel" class="side-panel hidden">
+    <div class="side-panel-head"><div><span class="eyebrow">SECURE MESSAGES</span><h3>NOTIFICATIONS</h3></div><button class="close-btn" id="closeNotifications">×</button></div>
+    <div id="notificationList"></div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <footer class="footer">
+    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.0</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script>
+/* Jedi Order Mission Terminal
+ * Front-end: static HTML/CSS/JS + Supabase.
+ * The app intentionally falls back to a local demo mode until Supabase is configured.
+ */
+(() => {
+  'use strict';
+
+  const CFG = window.MISSION_BOARD_CONFIG || {};
+  const LIVE = Boolean(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
+  const db = LIVE ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
+
+  const DEFAULT_MISSION_TYPES = {
+    WARFRONT: ['Assault','Defense','Recon','Sabotage','Intelligence','Supply','Aid','Escort','Search & Rescue','Elimination','Special Operations'],
+    JEDI: ['Artifact Recovery','Diplomacy','Research','Recon','Temple Operations','Support','Investigation','Exploration','Judicial','Special Operations']
+  };
+  const DEFAULT_PLANETS = ['Alderaan','Balmorra','Corellia','Coruscant','Dromund Kaas','Korriban','Nar Shaddaa','Ord Mantell','Taris','Tython'];
+  const THREATS = ['LOW','MODERATE','HIGH','CRITICAL'];
+  const STATUS = ['OPEN','IN_PROGRESS','COMPLETED','CANCELLED'];
+
+  const demoUser = {
+    id: 'demo-user', discord_user: 'Jedi_Commander', roblox_user: 'JediCommander', character_name: 'Jedi Knight Tatsu',
+    rank: 'Jedi Knight', pathway: 'Guardian', class: 'Battlemaster', role: 'owner'
+  };
+
+  const demoMissions = [
+    {id:'m1', code:'JO-071', name:'Operation Silent Meridian', main_category:'JEDI', type:'Investigation', threat_level:'CRITICAL', required_personnel:8, location:'Balmorra — Sobrik Sector', jedi_lead:'Master Kael Varyn', date:'2026-09-17T19:00:00', briefing:'Intelligence reports indicate that a Sith-aligned cell has infiltrated a Republic industrial district. Jedi personnel are to identify the cell, recover any captured Republic intelligence, and prevent the extraction of sensitive assets. Maintain discretion until the scope of the threat is confirmed.', status:'OPEN', result_summary:''},
+    {id:'m2', code:'JO-068', name:'Operation Ashen Gate', main_category:'WARFRONT', type:'Assault', threat_level:'HIGH', required_personnel:12, location:'Balmorra — Sundari Front', jedi_lead:'Battlemaster Serin Holt', date:'2026-09-18T20:00:00', briefing:'Republic forces require Jedi support at a contested defensive line. The objective is to break the hostile advance, protect Republic infantry, and secure the approach to the forward command post.', status:'OPEN', result_summary:''},
+    {id:'m3', code:'JO-073', name:'The Veiled Reliquary', main_category:'JEDI', type:'Artifact Recovery', threat_level:'HIGH', required_personnel:6, location:'Tython — Deep Ruins', jedi_lead:'Master Aven Daal', date:'2026-09-19T17:30:00', briefing:'A sealed chamber has been discovered beneath an abandoned temple complex. Recover the artifact without disturbing surrounding structures or activating unknown Force phenomena.', status:'OPEN', result_summary:''},
+    {id:'m4', code:'JO-064', name:'Operation Glass Shield', main_category:'WARFRONT', type:'Defense', threat_level:'MODERATE', required_personnel:10, location:'Ord Mantell — Fort Garnik', jedi_lead:'Jedi Knight Nira Sol', date:'2026-09-20T18:00:00', briefing:'Reinforce Republic positions and hold the outer defensive ring while engineers complete critical repairs.', status:'OPEN', result_summary:''},
+    {id:'m5', code:'JO-066', name:'Whispers in the Archive', main_category:'JEDI', type:'Research', threat_level:'MODERATE', required_personnel:5, location:'Coruscant — Jedi Temple Archives', jedi_lead:'Archivist Teral Venn', date:'2026-09-21T16:00:00', briefing:'Several archive entries have been altered without authorization. Trace the changes, determine their origin, and preserve the integrity of the affected records.', status:'OPEN', result_summary:''},
+    {id:'m6', code:'JO-070', name:'Operation Long Watch', main_category:'WARFRONT', type:'Recon', threat_level:'LOW', required_personnel:4, location:'Taris — Upper Wastes', jedi_lead:'Jedi Sentinel Ryn Kess', date:'2026-09-22T18:30:00', briefing:'Conduct a forward reconnaissance sweep and report hostile movement patterns without engaging unless extraction is compromised.', status:'OPEN', result_summary:''}
+  ];
+
+  const state = {
+    user: null,
+    missions: [],
+    applications: [],
+    notifications: [],
+    profiles: [],
+    announcements: [],
+    settings: {terminal_name:'MISSION TERMINAL', command_name:'JEDI ORDER // OPERATIONS COMMAND', footer_text:'SECURE • AUTHORIZED PERSONNEL ONLY', system_status:'SECURE CHANNEL'},
+    missionTypes: {WARFRONT:[...DEFAULT_MISSION_TYPES.WARFRONT], JEDI:[...DEFAULT_MISSION_TYPES.JEDI]},
+    planets: [...DEFAULT_PLANETS],
+    currentMission: null,
+    currentView: 'dashboard',
+    category: 'ALL',
+    adminTab: 'missions',
+    demo: !LIVE,
+  };
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const esc = (value) => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const dateFmt = (value) => value ? new Intl.DateTimeFormat('en-US', {month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit'}).format(new Date(value)) : 'TBD';
+  const initials = (value) => String(value || 'J').split(/\s+/).map(x => x[0]).join('').slice(0,2).toUpperCase();
+  const threatClass = (t) => String(t || '').toLowerCase();
+  const isCommand = () => ['command_staff','super_admin','owner'].includes(state.user?.role);
+  const isSuper = () => state.user?.role === 'super_admin';
+  const isOwner = () => state.user?.role === 'owner';
+  const roleLabel = (r) => ({player:'PLAYER', command_staff:'COMMAND STAFF', super_admin:'SUPER ADMIN', owner:'OWNER'}[r] || 'PLAYER');
+
+  function toast(message, kind='info') {
+    const el = document.createElement('div'); el.className='toast'; el.textContent=message;
+    if(kind==='error') el.style.borderColor='rgba(255,101,124,.6)';
+    if(kind==='success') el.style.borderColor='rgba(101,230,174,.55)';
+    document.body.appendChild(el); setTimeout(()=>el.remove(), 3000);
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:'UTC'});
+    const el = $('#gstdClock'); if(el) el.textContent = `GSTD ${time}`;
+  }
+  setInterval(updateClock,1000); updateClock();
+
+  function setUser(user) {
+    state.user = user;
+    $('#topUserName').textContent = user ? (user.character_name || user.discord_user || 'JEDI') : 'UNAUTHENTICATED';
+    $('#topUserRole').textContent = user ? roleLabel(user.role) : 'VIEWER';
+    $('.avatar').textContent = user ? initials(user.character_name || user.discord_user) : 'J';
+    if(user && isCommand()) {
+      if(!$('#adminNavBtn')) {
+        const btn = document.createElement('button'); btn.id='adminNavBtn'; btn.className='ghost-btn'; btn.dataset.view='admin'; btn.textContent='COMMAND';
+        $('.top-status').insertBefore(btn, $('#notificationBtn'));
+      }
+    } else $('#adminNavBtn')?.remove();
+  }
+
+  function showView(view) {
+    state.currentView = view;
+    $$('.page-view, #authView').forEach(x => x.classList.add('hidden'));
+    const target = view === 'auth' ? $('#authView') : $(`#${view}View`);
+    if(target) target.classList.remove('hidden');
+    if(view === 'dashboard') renderDashboard();
+    if(view === 'operations') renderOperations();
+    if(view === 'mission') renderMissionDetail();
+    if(view === 'profile') renderProfile();
+    if(view === 'admin') renderAdmin();
+  }
+
+  function sortMissions(list) {
+    const order = {CRITICAL:0,HIGH:1,MODERATE:2,LOW:3};
+    return [...list].sort((a,b) => (order[a.threat_level]??9)-(order[b.threat_level]??9) || new Date(a.date||0)-new Date(b.date||0));
+  }
+
+  function missionCard(m) {
+    const apps = state.applications.filter(a => a.mission_id === m.id && ['pending','approved'].includes(a.status));
+    const approved = apps.filter(a => a.status === 'approved').length;
+    const pct = Math.min(100, Math.round((approved / Math.max(1,m.required_personnel))*100));
+    const full = approved >= m.required_personnel;
+    return `<article class="mission-card ${['HIGH','CRITICAL'].includes(m.threat_level)?'high':''}" data-mission-id="${esc(m.id)}">
+      <div class="card-top"><span class="code">${esc(m.code || 'JO-NEW')}</span><span class="threat ${threatClass(m.threat_level)}">${esc(m.threat_level)} THREAT</span></div>
+      <h3>${esc(m.name)}</h3>
+      <div class="location">${esc(m.planet ? `${m.planet} — ${m.location}` : m.location)}</div>
+      <div class="briefing-preview">${esc(m.briefing)}</div>
+      <div class="card-footer">
+        <div class="metric"><label>TYPE</label><strong>${esc(m.type)}</strong></div>
+        <div class="metric"><label>DATE</label><strong>${esc(dateFmt(m.date))}</strong></div>
+        <div class="metric"><label>PERSONNEL</label><strong>${approved}/${esc(m.required_personnel)}</strong><div class="slots-bar"><div class="slots-fill" style="width:${pct}%"></div></div></div>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px"><span>${esc(m.main_category)} // ${esc(m.type)}</span><span>${full?'FULL':'VIEW BRIEFING →'}</span></div>
+    </article>`;
+  }
+
+  function renderDashboard() {
+    const active = state.missions.filter(m=>!['COMPLETED','CANCELLED'].includes(m.status));
+    const high = sortMissions(active.filter(m=>['HIGH','CRITICAL'].includes(m.threat_level))).slice(0,6);
+    const standard = sortMissions(active.filter(m=>!['HIGH','CRITICAL'].includes(m.threat_level))).slice(0,6);
+    $('#highRiskGrid').innerHTML = high.length ? high.map(missionCard).join('') : `<div class="empty"><strong>NO HIGH-RISK OPERATIONS</strong>Command has not posted any immediate priority missions.</div>`;
+    $('#standardGrid').innerHTML = standard.length ? standard.map(missionCard).join('') : `<div class="empty"><strong>NO STANDARD OPERATIONS</strong>No active operations are currently posted.</div>`;
+    $('#highRiskCounter').textContent = `${high.length} LISTED`; $('#standardCounter').textContent=`${standard.length} LISTED`;
+    $('#activeMissionCount').textContent = `${active.length} ACTIVE OPERATIONS`;
+    const critical = active.filter(m=>m.threat_level==='CRITICAL').length, highCount=active.filter(m=>m.threat_level==='HIGH').length;
+    $('#threatIndex').textContent = critical ? 'CRITICAL' : highCount ? 'ELEVATED' : 'STABLE';
+    $('#threatIndex').style.color = critical ? 'var(--danger)' : highCount ? 'var(--warn)' : 'var(--success)';
+  }
+
+  function renderOperations() {
+    const base = state.category==='ARCHIVE' ? state.missions.filter(m=>['COMPLETED','CANCELLED'].includes(m.status)) : state.missions.filter(m=>!['COMPLETED','CANCELLED'].includes(m.status));
+    const list = sortMissions(base).filter(m=>['ALL','ARCHIVE'].includes(state.category) || m.main_category===state.category);
+    $('#operationsGrid').innerHTML = list.length ? list.map(missionCard).join('') : `<div class="empty"><strong>${state.category==='ARCHIVE'?'NO ARCHIVED MISSIONS':'NO OPERATIONS FOUND'}</strong>${state.category==='ARCHIVE'?'Completed and cancelled operations will remain here as a permanent command archive.':'There are no active postings in this channel.'}</div>`;
+    $$('#categoryTabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.category===state.category));
+  }
+
+  function renderMissionDetail() {
+    const m = state.currentMission;
+    if(!m) { showView('operations'); return; }
+    const apps = state.applications.filter(a=>a.mission_id===m.id && ['pending','approved'].includes(a.status));
+    const approved = apps.filter(a=>a.status==='approved');
+    const mine = apps.find(a=>a.user_id===state.user?.id);
+    const canJoin = !mine && m.status==='OPEN' && approved.length < m.required_personnel;
+    const action = canJoin ? `<button class="primary-btn" id="applyBtn">REQUEST ASSIGNMENT</button>` : mine ? `<button class="ghost-btn" id="withdrawBtn">WITHDRAW REQUEST</button>` : approved.length>=m.required_personnel ? `<button class="ghost-btn" disabled>MISSION FULL</button>` : '';
+    const adminActions = isCommand() ? `<button class="ghost-btn" id="editMissionBtn">EDIT</button><button class="danger-btn" id="deleteMissionBtn">DELETE</button>` : '';
+    $('#missionDetail').innerHTML = `<div class="detail-panel">
+      <div class="detail-head"><div><span class="code">${esc(m.code || 'JO-NEW')} // ${esc(m.main_category)}</span><h1>${esc(m.name)}</h1><div class="location">${esc(m.planet ? `${m.planet} — ${m.location}` : m.location)}</div></div><div class="detail-actions">${action}${adminActions}</div></div>
+      <div class="detail-meta"><div><label>MISSION TYPE</label><strong>${esc(m.type)}</strong></div><div><label>THREAT LEVEL</label><strong style="color:${m.threat_level==='CRITICAL'?'var(--danger)':m.threat_level==='HIGH'?'var(--warn)':'var(--cyan)'}">${esc(m.threat_level)}</strong></div><div><label>REQUIRED</label><strong>${esc(m.required_personnel)} PERSONNEL</strong></div><div><label>JEDI LEAD</label><strong>${esc(m.jedi_lead)}</strong></div><div><label>DATE</label><strong>${esc(dateFmt(m.date))}</strong></div></div>
+      <div class="briefing"><h3>MISSION BRIEFING</h3><p>${esc(m.briefing)}</p>${m.result_summary?`<h3 style="margin-top:24px">OFFICIAL RESULT</h3><p>${esc(m.result_summary)}</p>`:''}</div>
+      <div class="roster"><h3>PERSONNEL ROSTER — ${approved.length}/${esc(m.required_personnel)}</h3><div class="roster-list">${approved.length ? approved.map(a=>`<div class="roster-item"><span>${esc(a.character_name || a.profile?.character_name || 'Jedi')}</span><small>${esc(a.rank || a.profile?.rank || '')}</small></div>`).join('') : `<div class="empty" style="grid-column:1/-1">No approved personnel assigned.</div>`}</div></div>
+      ${mine ? `<div class="auth-note" style="margin-top:20px">YOUR REQUEST STATUS: <strong style="color:${mine.status==='approved'?'var(--success)':mine.status==='pending'?'var(--warn)':'var(--danger)'}">${esc(mine.status.toUpperCase())}</strong></div>`:''}
+    </div>`;
+    $('#applyBtn')?.addEventListener('click', ()=>applyToMission(m.id));
+    $('#withdrawBtn')?.addEventListener('click', ()=>withdrawApplication(mine.id));
+    $('#editMissionBtn')?.addEventListener('click', ()=>openMissionModal(m));
+    $('#deleteMissionBtn')?.addEventListener('click', ()=>deleteMission(m.id));
+  }
+
+  function renderProfile() {
+    const u = state.user;
+    if(!u) return showView('auth');
+    const history = state.applications.filter(a=>a.user_id===u.id && a.status==='approved').map(a=>({a,m:state.missions.find(m=>m.id===a.mission_id)})).filter(x=>x.m);
+    $('#profilePanel').innerHTML = `<div class="profile-card">
+      <div class="profile-head"><div class="profile-avatar">${esc(initials(u.character_name||u.discord_user))}</div><div><h2>${esc(u.character_name||'Jedi Personnel')}</h2><p>${esc(u.discord_user||'Discord identity not recorded')}</p></div><div class="role-pill">${esc(roleLabel(u.role))}</div></div><div style="display:flex;gap:8px;margin:15px 0 0"><button class="ghost-btn" id="editOwnProfileBtn">EDIT PERSONNEL RECORD</button><button class="danger-btn" id="signOutBtn">END SESSION</button></div>
+      <div class="profile-grid"><div><label>ROBLOX USER</label><strong>${esc(u.roblox_user||'—')}</strong></div><div><label>RANK</label><strong>${esc(u.rank||'—')}</strong></div><div><label>PATHWAY</label><strong>${esc(u.pathway||'—')}</strong></div><div><label>CLASS</label><strong>${esc(u.class||'—')}</strong></div><div><label>MISSIONS</label><strong>${history.length}</strong></div></div>
+      <h3 style="font:700 13px Orbitron;color:var(--cyan);letter-spacing:.1em;margin:25px 0 12px">OPERATIONAL HISTORY</h3>
+      ${history.length ? `<table class="history-table"><thead><tr><th>MISSION</th><th>TYPE</th><th>LOCATION</th><th>DATE</th><th>STATUS</th></tr></thead><tbody>${history.map(x=>`<tr><td>${esc(x.m.name)}</td><td>${esc(x.m.type)}</td><td>${esc(x.m.location)}</td><td>${esc(dateFmt(x.m.date))}</td><td style="color:var(--success)">ASSIGNED</td></tr>`).join('')}</tbody></table>` : `<div class="empty"><strong>NO COMPLETED ASSIGNMENTS</strong>Your approved mission history will appear here.</div>`}
+    </div>`;
+    bindProfileActions();
+  }
+
+  async function loadSettings() {
+    if(state.demo) return;
+    const {data,error}=await db.from('site_settings').select('*').eq('id',1).single();
+    if(!error && data) state.settings=data;
+  }
+  function applySettings() {
+    document.title=state.settings.terminal_name || 'Jedi Order Mission Terminal';
+    $('.brand-title').textContent=state.settings.terminal_name || 'MISSION TERMINAL';
+    $('.brand .eyebrow').textContent=state.settings.command_name || 'JEDI ORDER // OPERATIONS COMMAND';
+    $('.system-status').innerHTML=`<span class="status-dot"></span> ${esc(state.settings.system_status || 'SECURE CHANNEL')}`;
+    const spans=$$('.footer span'); if(spans[1]) spans[1].textContent=state.settings.footer_text || 'SECURE • AUTHORIZED PERSONNEL ONLY';
+  }
+
+  async function ensureProfileComplete() {
+    if(state.demo || !state.user) return;
+    const required=['roblox_user','character_name','rank','pathway','class'];
+    if(required.every(k=>state.user[k])) return;
+    openProfileModal(state.user, true);
+  }
+
+  function openProfileModal(p, required=false) {
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">JEDI PERSONNEL RECORD</span><h2>${required?'COMPLETE PERSONNEL RECORD':'EDIT PERSONNEL RECORD'}</h2></div>${required?'':'<button class="close-btn" id="closeModal">×</button>'}</div>
+      <form id="profileForm"><div class="form-grid">
+      <div class="field"><label>DISCORD USER</label><input value="${esc(p.discord_user||'')}" disabled></div>
+      <div class="field"><label>ROBLOX USER</label><input name="roblox_user" required value="${esc(p.roblox_user||'')}"></div>
+      <div class="field"><label>CHARACTER NAME</label><input name="character_name" required value="${esc(p.character_name||'')}"></div>
+      <div class="field"><label>RANK</label><input name="rank" required value="${esc(p.rank||'')}"></div>
+      <div class="field"><label>PATHWAY</label><input name="pathway" required value="${esc(p.pathway||'')}"></div>
+      <div class="field"><label>CLASS</label><input name="class" required value="${esc(p.class||'')}"></div>
+      </div><div class="modal-actions">${required?'':'<button type="button" class="ghost-btn" id="cancelModal">CANCEL</button>'}<button class="primary-btn">${required?'SAVE PERSONNEL RECORD':'SAVE CHANGES'}</button></div></form></div></div>`;
+    $('#closeModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML=''); $('#cancelModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML='');
+    $('#profileForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');return;}const {error}=await db.from('profiles').update(patch).eq('id',p.id);if(error)return toast(error.message,'error');Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');};
+  }
+
+  function bindProfileActions() { $('#editOwnProfileBtn')?.addEventListener('click',()=>openProfileModal(state.user,false)); $('#signOutBtn')?.addEventListener('click',signOut); }
+
+  async function fetchAll() {
+    if(state.demo) {
+      state.missions = [...demoMissions];
+      state.applications = [
+        {id:'a1',mission_id:'m1',user_id:'demo-user',status:'pending',character_name:demoUser.character_name,rank:demoUser.rank},
+        {id:'a2',mission_id:'m2',user_id:'other-user',status:'approved',character_name:'Jedi Knight Varek',rank:'Jedi Knight'},
+        {id:'a3',mission_id:'m2',user_id:'other-user2',status:'approved',character_name:'Jedi Guardian Sera',rank:'Jedi Guardian'},
+        {id:'a4',mission_id:'m3',user_id:'other-user3',status:'approved',character_name:'Jedi Consular Aryn',rank:'Jedi Consular'}
+      ];
+      state.notifications = [{id:'n1',title:'MISSION TERMINAL ONLINE',body:'Demo mode is active. Connect Supabase to enable live personnel records.',read:false,created_at:new Date().toISOString()}];
+      loadLocalDirectory();
+      setUser({...demoUser});
+      $('#demoNote')?.classList.remove('hidden');
+      $('#discordLoginBtn').textContent='◆ ENTER DEMO TERMINAL';
+      updateNotificationBadge();
+      return;
+    }
+    const {data:{user},error} = await db.auth.getUser();
+    if(error) throw error;
+    if(!user) { setUser(null); showView('auth'); return; }
+    const profile = await getProfile(user.id);
+    setUser(profile);
+    await Promise.all([loadMissions(), loadDirectory(), loadApplications(), loadNotifications()]);
+    await loadAnnouncements();
+    await loadSettings();
+    applySettings();
+    await ensureProfileComplete();
+  }
+
+  async function getProfile(userId) {
+    const {data,error}=await db.from('profiles').select('*').eq('id',userId).single();
+    if(error) throw error; return data;
+  }
+  async function loadMissions() { const {data,error}=await db.from('missions').select('*').order('date',{ascending:true}); if(error) throw error; state.missions=data||[]; }
+  async function loadApplications() {
+    const {data,error}=await db.from('mission_applications').select('*, profiles(character_name,rank)').order('created_at',{ascending:true}); if(error) throw error;
+    state.applications=(data||[]).map(a=>({...a,character_name:a.character_name||a.profiles?.character_name,rank:a.rank||a.profiles?.rank}));
+  }
+  async function loadNotifications() { const {data,error}=await db.from('notifications').select('*').order('created_at',{ascending:false}).limit(30); if(error) throw error; state.notifications=data||[]; updateNotificationBadge(); }
+  async function loadAnnouncements() { const {data}=await db.from('announcements').select('*').order('created_at',{ascending:false}); state.announcements=data||[]; }
+
+  function updateNotificationBadge() { const n=state.notifications.filter(x=>!x.read).length; $('#notifCount').textContent=n; $('#notifCount').classList.toggle('hidden',!n); }
+  function renderNotifications() {
+    $('#notificationList').innerHTML = state.notifications.length ? state.notifications.map(n=>`<div class="notification ${n.read?'':'unread'}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p><time>${esc(dateFmt(n.created_at))}</time></div>`).join('') : `<div class="empty">No secure messages.</div>`;
+  }
+
+  async function markNotificationsRead() {
+    state.notifications.forEach(n=>n.read=true); updateNotificationBadge();
+    if(!state.demo && state.user) await db.from('notifications').update({read:true}).eq('user_id',state.user.id).eq('read',false);
+  }
+
+  async function signIn() {
+    if(state.demo) { setUser({...demoUser}); showView('dashboard'); toast('Demo terminal authenticated.','success'); return; }
+    const {error}=await db.auth.signInWithOAuth({provider:'discord',options:{redirectTo:window.location.href}});
+    if(error) toast(error.message,'error');
+  }
+
+  async function signOut() {
+    if(state.demo) { setUser(null); showView('auth'); return; }
+    await db.auth.signOut(); setUser(null); showView('auth');
+  }
+
+  async function applyToMission(missionId) {
+    if(state.demo) {
+      state.applications.push({id:`demo-${Date.now()}`,mission_id:missionId,user_id:state.user.id,status:'pending',character_name:state.user.character_name,rank:state.user.rank});
+      toast('Assignment request transmitted to Command Staff.','success'); renderMissionDetail(); return;
+    }
+    const {error}=await db.from('mission_applications').insert({mission_id:missionId,user_id:state.user.id,status:'pending'});
+    if(error) return toast(error.message,'error');
+    await loadApplications(); toast('Assignment request transmitted.','success'); renderMissionDetail();
+  }
+
+  async function withdrawApplication(appId) {
+    if(state.demo) { const a=state.applications.find(x=>x.id===appId); if(a) a.status='withdrawn'; toast('Assignment request withdrawn.'); renderMissionDetail(); return; }
+    const {error}=await db.from('mission_applications').update({status:'withdrawn'}).eq('id',appId).eq('user_id',state.user.id);
+    if(error) return toast(error.message,'error'); await loadApplications(); toast('Assignment request withdrawn.'); renderMissionDetail();
+  }
+
+  function openMissionModal(m=null) {
+    const isEdit=Boolean(m);
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND AUTHORITY</span><h2>${isEdit?'EDIT MISSION':'POST NEW MISSION'}</h2></div><button class="close-btn" id="closeModal">×</button></div>
+      <form id="missionForm"><div class="form-grid">
+      <div class="field"><label>MISSION NAME</label><input name="name" required value="${esc(m?.name||'')}"></div>
+      <div class="field"><label>MISSION CODE</label><input name="code" required value="${esc(m?.code||'JO-')}" placeholder="JO-001"></div>
+      <div class="field"><label>MAIN CATEGORY</label><select name="main_category"><option value="WARFRONT" ${m?.main_category==='WARFRONT'?'selected':''}>WARFRONT OPERATIONS</option><option value="JEDI" ${m?.main_category==='JEDI'?'selected':''}>JEDI OPERATIONS</option></select></div>
+      <div class="field"><label>MISSION TYPE</label><select name="type" id="missionType"></select></div>
+      <div class="field"><label>PLANET</label><select name="planet" id="missionPlanet"></select></div>
+      <div class="field"><label>LOCATION / SITE</label><input name="location" required value="${esc(m?.location||'')}"></div>
+      <div class="field"><label>THREAT LEVEL</label><select name="threat_level">${THREATS.map(t=>`<option ${m?.threat_level===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>REQUIRED PERSONNEL</label><input name="required_personnel" type="number" min="1" required value="${esc(m?.required_personnel||6)}"></div>
+      <div class="field"><label>JEDI LEAD</label><input name="jedi_lead" required value="${esc(m?.jedi_lead||state.user?.character_name||'')}"></div>
+      <div class="field"><label>DATE / TIME</label><input name="date" type="datetime-local" required value="${m?.date ? new Date(m.date).toISOString().slice(0,16) : ''}"></div>
+      <div class="field"><label>STATUS</label><select name="status">${STATUS.map(s=>`<option ${m?.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field full"><label>MISSION BRIEFING</label><textarea name="briefing" required>${esc(m?.briefing||'')}</textarea></div>
+      <div class="field full"><label>RESULT / ARCHIVE SUMMARY</label><textarea name="result_summary" placeholder="Optional. Complete missions can retain an official result summary.">${esc(m?.result_summary||'')}</textarea></div>
+      </div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn" type="submit">${isEdit?'SAVE CHANGES':'POST MISSION'}</button></div></form></div></div>`;
+    const category=$('[name="main_category"]'); const type=$('#missionType'); const planet=$('#missionPlanet');
+    const fillTypes=()=>{const arr=state.missionTypes[category.value] || []; type.innerHTML=arr.map(x=>`<option ${m?.type===x?'selected':''}>${esc(x)}</option>`).join('');};
+    const fillPlanets=()=>{planet.innerHTML=state.planets.map(x=>`<option value="${esc(x)}" ${m?.planet===x?'selected':''}>${esc(x)}</option>`).join('');};
+    category.addEventListener('change',fillTypes); fillTypes(); fillPlanets();
+    $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
+    $('#missionForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);const payload=Object.fromEntries(fd.entries());payload.required_personnel=Number(payload.required_personnel);payload.date=new Date(payload.date).toISOString();await saveMission(payload,m?.id);});
+  }
+
+  async function saveMission(payload,id) {
+    if(state.demo) {
+      if(id){const idx=state.missions.findIndex(m=>m.id===id);state.missions[idx]={...state.missions[idx],...payload};}
+      else state.missions.unshift({id:`m-${Date.now()}`,...payload});
+      $('#modalRoot').innerHTML=''; if(id){state.currentMission=state.missions.find(m=>m.id===id);showView('mission');}else{showView('admin');} toast(id?'Mission updated.':'Mission posted.','success'); return;
+    }
+    const q=id ? db.from('missions').update(payload).eq('id',id) : db.from('missions').insert({...payload,created_by:state.user.id});
+    const {error}=await q; if(error)return toast(error.message,'error'); $('#modalRoot').innerHTML=''; await loadMissions(); showView(id?'mission':'admin'); if(id) renderMissionDetail(); toast(id?'Mission updated.':'Mission posted.','success');
+  }
+
+  async function deleteMission(id) {
+    if(!confirm('Delete this mission posting? This cannot be undone.')) return;
+    if(state.demo){state.missions=state.missions.filter(m=>m.id!==id);showView('admin');toast('Mission deleted.');return;}
+    const {error}=await db.from('missions').delete().eq('id',id);if(error)return toast(error.message,'error');await loadMissions();showView('admin');toast('Mission deleted.');
+  }
+
+  async function setApplicationStatus(id,status) {
+    const app=state.applications.find(a=>a.id===id); if(!app) return;
+    if(state.demo){app.status=status;toast(`Request ${status}.`,'success');renderAdmin();renderMissionDetail();return;}
+    const {error}=await db.from('mission_applications').update({status}).eq('id',id);if(error)return toast(error.message,'error');await loadApplications();toast(`Request ${status}.`,'success');renderAdmin();
+  }
+
+  function renderAdmin() {
+    if(!isCommand()){showView('dashboard');return;}
+    $$('.admin-tabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===state.adminTab));
+    if(state.adminTab==='missions') renderAdminMissions();
+    if(state.adminTab==='applications') renderAdminApplications();
+    if(state.adminTab==='personnel') renderAdminPersonnel();
+    if(state.adminTab==='announcements') renderAdminAnnouncements();
+    if(state.adminTab==='settings') renderAdminSettings();
+    if(state.adminTab==='directory') renderAdminDirectory();
+  }
+  function renderAdminMissions(){
+    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CODE</th><th>MISSION</th><th>CATEGORY</th><th>THREAT</th><th>DATE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${state.missions.map(m=>`<tr><td>${esc(m.code)}</td><td>${esc(m.name)}</td><td>${esc(m.main_category)}</td><td>${esc(m.threat_level)}</td><td>${esc(dateFmt(m.date))}</td><td>${esc(m.status)}</td><td><div class="admin-actions"><button class="mini-btn" data-edit="${esc(m.id)}">EDIT</button><button class="mini-btn" data-open="${esc(m.id)}">VIEW</button><button class="mini-btn danger" data-delete="${esc(m.id)}">DELETE</button></div></td></tr>`).join('')}</tbody></table></div>`;
+    $$('[data-edit]').forEach(b=>b.onclick=()=>openMissionModal(state.missions.find(m=>m.id===b.dataset.edit)));$$('[data-open]').forEach(b=>b.onclick=()=>{state.currentMission=state.missions.find(m=>m.id===b.dataset.open);showView('mission')});$$('[data-delete]').forEach(b=>b.onclick=()=>deleteMission(b.dataset.delete));
+  }
+  function renderAdminApplications(){
+    const apps=[...state.applications].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>PERSONNEL</th><th>MISSION</th><th>RANK</th><th>REQUESTED</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${apps.length?apps.map(a=>{const m=state.missions.find(x=>x.id===a.mission_id); const actions=a.status==='pending'?`<button class="mini-btn approve" data-approve="${esc(a.id)}">APPROVE</button><button class="mini-btn danger" data-decline="${esc(a.id)}">DECLINE</button>`:a.status==='approved'?`<button class="mini-btn danger" data-remove="${esc(a.id)}">REMOVE</button>`:'—'; return `<tr><td>${esc(a.character_name||'Jedi Personnel')}</td><td>${esc(m?.name||'Unknown')}</td><td>${esc(a.rank||'—')}</td><td>${esc(dateFmt(a.created_at||new Date().toISOString()))}</td><td>${esc(a.status.toUpperCase())}</td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="6"><div class="empty">No assignment requests.</div></td></tr>`}</tbody></table></div>`;
+    $$('[data-approve]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.approve,'approved'));$$('[data-decline]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.decline,'declined'));$$('[data-remove]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.remove,'removed'));
+  }
+  function renderAdminPersonnel(){
+    const profiles=state.profiles.length?state.profiles:[state.user].filter(Boolean);
+    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>ACTIONS</th></tr></thead><tbody>${profiles.map(p=>`<tr><td>${esc(p.character_name)}</td><td>${esc(p.roblox_user)}</td><td>${esc(p.rank)}</td><td>${esc(p.pathway)}</td><td>${esc(p.class)}</td><td>${esc(roleLabel(p.role))}</td><td><div class="admin-actions"><button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>${isOwner()?`<button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`;
+    $$('[data-role]').forEach(b=>b.onclick=()=>changeRole(b.dataset.role));
+    $$('[data-profile-edit]').forEach(b=>b.onclick=()=>openProfileModal(profiles.find(p=>p.id===b.dataset.profileEdit), false));
+    if(!state.demo && isSuper()) db.from('profiles').select('*').order('character_name').then(({data})=>{state.profiles=data||[];renderAdminPersonnel();});
+  }
+  function renderAdminAnnouncements(){
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>`<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time></div>`).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;
+    $('#newAnnouncementBtn').onclick=openAnnouncementModal;
+  }
+  function renderAdminSettings(){
+    const s=state.settings;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div class="eyebrow">TERMINAL CONFIGURATION</div><h3 style="font:700 16px Orbitron;margin:6px 0 18px">WEBSITE SETTINGS</h3><form id="settingsForm"><div class="form-grid"><div class="field"><label>TERMINAL NAME</label><input name="terminal_name" value="${esc(s.terminal_name||'MISSION TERMINAL')}"></div><div class="field"><label>COMMAND DESIGNATION</label><input name="command_name" value="${esc(s.command_name||'JEDI ORDER // OPERATIONS COMMAND')}"></div><div class="field"><label>SYSTEM STATUS LABEL</label><input name="system_status" value="${esc(s.system_status||'SECURE CHANNEL')}"></div><div class="field"><label>FOOTER NOTICE</label><input name="footer_text" value="${esc(s.footer_text||'SECURE • AUTHORIZED PERSONNEL ONLY')}"></div></div><div class="modal-actions"><button class="primary-btn">SAVE TERMINAL SETTINGS</button></div></form></div>`;
+    $('#settingsForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');return;}const {error}=await db.from('site_settings').update(patch).eq('id',1);if(error)return toast(error.message,'error');Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');};
+  }
+
+  function saveLocalDirectory() {
+    if (!state.demo) return;
+    localStorage.setItem('jediMissionDirectory', JSON.stringify({missionTypes:state.missionTypes, planets:state.planets}));
+  }
+
+  function loadLocalDirectory() {
+    if (!state.demo) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem('jediMissionDirectory') || 'null');
+      if (saved?.missionTypes?.WARFRONT?.length) state.missionTypes.WARFRONT = saved.missionTypes.WARFRONT;
+      if (saved?.missionTypes?.JEDI?.length) state.missionTypes.JEDI = saved.missionTypes.JEDI;
+      if (Array.isArray(saved?.planets) && saved.planets.length) state.planets = saved.planets;
+    } catch (_) {}
+  }
+
+  async function directoryMutation(table, action, payload, id) {
+    if (state.demo) return true;
+    let q;
+    if (action === 'insert') q = db.from(table).insert(payload);
+    if (action === 'update') q = db.from(table).update(payload).eq('id', id);
+    if (action === 'delete') q = db.from(table).delete().eq('id', id);
+    const {error} = await q;
+    if (error) { toast(error.message, 'error'); return false; }
+    return true;
+  }
+
+  async function addMissionType(category) {
+    const name = prompt(`Enter a new ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} mission subcategory:`)?.trim();
+    if (!name) return;
+    if (state.missionTypes[category].some(x => x.toLowerCase() === name.toLowerCase())) return toast('That subcategory already exists.', 'error');
+    if (!state.demo) {
+      const ok = await directoryMutation('mission_types','insert',{main_category:category,name,sort_order:state.missionTypes[category].length});
+      if (!ok) return;
+      await loadDirectory();
+    } else { state.missionTypes[category].push(name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} added to ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} Operations.`, 'success');
+  }
+
+  async function editMissionType(category, oldName) {
+    const name = prompt('Rename mission subcategory:', oldName)?.trim();
+    if (!name || name === oldName) return;
+    if (state.missionTypes[category].some(x => x.toLowerCase() === name.toLowerCase() && x !== oldName)) return toast('That subcategory already exists.', 'error');
+    const affected = state.missions.filter(m => m.main_category === category && m.type === oldName);
+    if (!state.demo) {
+      const row = await db.from('mission_types').select('id').eq('main_category',category).eq('name',oldName).single();
+      if (row.error) return toast(row.error.message,'error');
+      const ok = await directoryMutation('mission_types','update',{name},row.data.id);
+      if (!ok) return;
+      if (affected.length) {
+        const {error} = await db.from('missions').update({type:name}).eq('main_category',category).eq('type',oldName);
+        if (error) return toast(error.message,'error');
+      }
+      await loadDirectory(); await loadMissions();
+    } else {
+      state.missionTypes[category] = state.missionTypes[category].map(x => x === oldName ? name : x);
+      state.missions.forEach(m => { if(m.main_category===category && m.type===oldName) m.type=name; });
+      saveLocalDirectory();
+    }
+    renderAdminDirectory(); renderDashboard(); toast('Mission subcategory updated.','success');
+  }
+
+  async function removeMissionType(category, name) {
+    const affected = state.missions.filter(m => m.main_category === category && m.type === name && !['COMPLETED','CANCELLED'].includes(m.status));
+    if (affected.length) return toast(`Cannot remove ${name}: ${affected.length} active mission(s) still use it.`, 'error');
+    if (!confirm(`Remove the ${name} subcategory from the ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} roster?`)) return;
+    if (!state.demo) {
+      const row = await db.from('mission_types').select('id').eq('main_category',category).eq('name',name).single();
+      if (row.error) return toast(row.error.message,'error');
+      const ok = await directoryMutation('mission_types','delete',null,row.data.id); if(!ok)return;
+      await loadDirectory();
+    } else { state.missionTypes[category] = state.missionTypes[category].filter(x => x !== name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast('Mission subcategory removed.','success');
+  }
+
+  async function addPlanet() {
+    const name = prompt('Enter a planet to add to the planetary roster:')?.trim();
+    if (!name) return;
+    if (state.planets.some(x => x.toLowerCase() === name.toLowerCase())) return toast('That planet is already on the roster.','error');
+    if (!state.demo) { const ok=await directoryMutation('planets','insert',{name,sort_order:state.planets.length}); if(!ok)return; await loadDirectory(); }
+    else { state.planets.push(name); state.planets.sort(); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} added to the planetary roster.`,'success');
+  }
+
+  async function removePlanet(name) {
+    const affected = state.missions.filter(m => (m.planet === name) && !['COMPLETED','CANCELLED'].includes(m.status));
+    if (affected.length) return toast(`Cannot remove ${name}: ${affected.length} active mission(s) still use it.`, 'error');
+    if (!confirm(`Remove ${name} from the planetary roster?`)) return;
+    if (!state.demo) { const row=await db.from('planets').select('id').eq('name',name).single(); if(row.error)return toast(row.error.message,'error'); const ok=await directoryMutation('planets','delete',null,row.data.id); if(!ok)return; await loadDirectory(); }
+    else { state.planets=state.planets.filter(x=>x!==name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} removed from the planetary roster.`,'success');
+  }
+
+  function renderAdminDirectory() {
+    const typeSection = (category) => {
+      const label = category === 'WARFRONT' ? 'WARFRONT OPERATIONS' : 'JEDI OPERATIONS';
+      const rows = state.missionTypes[category].map((name,i)=>`<div class="directory-row"><span><b>${String(i+1).padStart(2,'0')}</b>${esc(name)}</span><div class="admin-actions"><button class="mini-btn" data-type-edit="${esc(category)}" data-type-name="${esc(name)}">RENAME</button><button class="mini-btn danger" data-type-delete="${esc(category)}" data-type-name="${esc(name)}">REMOVE</button></div></div>`).join('');
+      return `<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">MISSION TAXONOMY</span><h3>${label}</h3><p>Manage the subcategories Command can assign to new operations.</p></div><button class="primary-btn" data-type-add="${category}">+ ADD SUBCATEGORY</button></div><div class="directory-list">${rows || '<div class="empty">No subcategories configured.</div>'}</div></div>`;
+    };
+    const planets = state.planets.map((name,i)=>`<div class="directory-row"><span><b>${String(i+1).padStart(2,'0')}</b>${esc(name)}</span><button class="mini-btn danger" data-planet-delete="${esc(name)}">REMOVE</button></div>`).join('');
+    $('#adminContent').innerHTML = `<div class="directory-grid">${typeSection('WARFRONT')}${typeSection('JEDI')}</div><div class="directory-card planet-card"><div class="directory-head"><div><span class="eyebrow">NAVIGATION DATABASE</span><h3>PLANETARY ROSTER</h3><p>Only planets on this roster appear when Command posts an operation.</p></div><button class="primary-btn" id="addPlanetBtn">+ ADD PLANET</button></div><div class="directory-list">${planets || '<div class="empty">No planets configured.</div>'}</div></div>`;
+    $$('[data-type-add]').forEach(b=>b.onclick=()=>addMissionType(b.dataset.typeAdd));
+    $$('[data-type-edit]').forEach(b=>b.onclick=()=>editMissionType(b.dataset.typeEdit,b.dataset.typeName));
+    $$('[data-type-delete]').forEach(b=>b.onclick=()=>removeMissionType(b.dataset.typeDelete,b.dataset.typeName));
+    $$('[data-planet-delete]').forEach(b=>b.onclick=()=>removePlanet(b.dataset.planetDelete));
+    $('#addPlanetBtn').onclick=addPlanet;
+  }
+
+  async function loadDirectory() {
+    if (state.demo) { loadLocalDirectory(); return; }
+    const [types, planets] = await Promise.all([
+      db.from('mission_types').select('*').order('main_category').order('sort_order').order('name'),
+      db.from('planets').select('*').order('sort_order').order('name')
+    ]);
+    if(types.error) throw types.error; if(planets.error) throw planets.error;
+    state.missionTypes = {WARFRONT:[], JEDI:[]};
+    (types.data||[]).forEach(x=>{ if(state.missionTypes[x.main_category]) state.missionTypes[x.main_category].push(x.name); });
+    state.planets = (planets.data||[]).map(x=>x.name);
+  }
+
+  async function changeRole(id){
+    const role=prompt('Enter role: player, command_staff, super_admin, or owner');if(!['player','command_staff','super_admin','owner'].includes(role))return;
+    if(state.demo){toast('Role changes require live Supabase mode.');return;}
+    const {error}=await db.from('profiles').update({role}).eq('id',id);if(error)return toast(error.message,'error');toast('Personnel role updated.','success');renderAdminPersonnel();
+  }
+  function openAnnouncementModal(){
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>POST ANNOUNCEMENT</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required></div><div class="field full"><label>MESSAGE</label><textarea name="body" required></textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">PUBLISH</button></div></form></div></div>`;
+    $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
+    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){state.announcements.unshift({id:`a-${Date.now()}`,...data,created_at:new Date().toISOString()});$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');return;}const {error}=await db.from('announcements').insert({...data,created_by:state.user.id});if(error)return toast(error.message,'error');await loadAnnouncements();$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');};
+  }
+
+  function bindEvents() {
+    document.addEventListener('click', e=>{
+      const nav=e.target.closest('[data-view]'); if(nav){e.preventDefault();showView(nav.dataset.view);return;}
+      const card=e.target.closest('[data-mission-id]'); if(card){state.currentMission=state.missions.find(m=>m.id===card.dataset.missionId);showView('mission');return;}
+    });
+    $('#discordLoginBtn').onclick=signIn;
+    $('#notificationBtn').onclick=()=>{$('#notificationPanel').classList.remove('hidden');renderNotifications();markNotificationsRead();};
+    $('#closeNotifications').onclick=()=>$('#notificationPanel').classList.add('hidden');
+    $('#userChip').onclick=()=>state.user&&showView('profile');
+    $('#backToOperations').onclick=()=>showView('operations');
+    $$('#categoryTabs .tab').forEach(b=>b.onclick=()=>{state.category=b.dataset.category;renderOperations();});
+    $$('.admin-tabs .tab').forEach(b=>b.onclick=()=>{state.adminTab=b.dataset.adminTab;renderAdmin();});
+    $('#newMissionBtn').onclick=()=>openMissionModal();
+  }
+
+  async function init() {
+    bindEvents();
+    if(!LIVE) {
+      await fetchAll(); showView('dashboard');
+      return;
+    }
+    try {
+      db.auth.onAuthStateChange(async (_event,session)=>{
+        if(session?.user){try{await fetchAll();showView('dashboard');}catch(e){console.error(e);toast(e.message,'error');}}
+        else {setUser(null);showView('auth');}
+      });
+      await fetchAll();
+      if(state.user) showView('dashboard');
+    } catch(e) {
+      console.error(e); toast('Terminal database connection failed. Check Supabase configuration.','error'); showView('auth');
+    }
+  }
+  init();
+})();
+
+  </script>
+</body>
+</html>
