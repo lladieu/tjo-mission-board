@@ -246,7 +246,7 @@ button { cursor: pointer; }
   <div id="modalRoot"></div>
 
   <footer class="footer">
-    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.3</span>
+    <span>JEDI ORDER MISSION TERMINAL</span><span>SECURE • AUTHORIZED PERSONNEL ONLY</span><span id="appVersion">TERMINAL v1.4</span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -685,8 +685,10 @@ button { cursor: pointer; }
     if(!state.demo && isSuper()) db.from('profiles').select('*').order('character_name').then(({data})=>{state.profiles=data||[];renderAdminPersonnel();});
   }
   function renderAdminAnnouncements(){
-    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>`<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time></div>`).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;
-    $('#newAnnouncementBtn').onclick=openAnnouncementModal;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>{const canManage=isOwner()||a.created_by===state.user?.id;return `<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time>${canManage?`<div style="display:flex;gap:8px;margin-top:12px"><button class="ghost-btn edit-announcement" data-id="${esc(a.id)}">EDIT</button><button class="danger-btn delete-announcement" data-id="${esc(a.id)}">DELETE</button></div>`:''}</div>`}).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;
+    $('#newAnnouncementBtn').onclick=()=>openAnnouncementModal();
+    $$('.edit-announcement').forEach(b=>b.onclick=()=>openAnnouncementModal(state.announcements.find(a=>a.id===b.dataset.id)));
+    $$('.delete-announcement').forEach(b=>b.onclick=()=>deleteAnnouncement(b.dataset.id));
   }
   function renderAdminSettings(){
     const s=state.settings;
@@ -870,10 +872,19 @@ button { cursor: pointer; }
     if(state.demo){toast('Role changes require live Supabase mode.');return;}
     const {error}=await db.from('profiles').update({role}).eq('id',id);if(error)return toast(error.message,'error');toast('Personnel role updated.','success');renderAdminPersonnel();
   }
-  function openAnnouncementModal(){
-    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>POST ANNOUNCEMENT</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required></div><div class="field full"><label>MESSAGE</label><textarea name="body" required></textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">PUBLISH</button></div></form></div></div>`;
+  function openAnnouncementModal(existing=null){
+    const editing=!!existing;
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>${editing?'EDIT ANNOUNCEMENT':'POST ANNOUNCEMENT'}</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required value="${esc(existing?.title||'')}"></div><div class="field full"><label>MESSAGE</label><textarea name="body" required>${esc(existing?.body||'')}</textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">${editing?'SAVE CHANGES':'PUBLISH'}</button></div></form></div></div>`;
     $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
-    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){state.announcements.unshift({id:`a-${Date.now()}`,...data,created_at:new Date().toISOString()});state.notifications.unshift({id:`n-${Date.now()}`,title:`COMMAND BULLETIN: ${data.title}`,body:data.body,read:false,created_at:new Date().toISOString()});updateNotificationBadge();$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published and personnel notified.','success');return;}const {error}=await db.from('announcements').insert({...data,created_by:state.user.id});if(error)return toast(error.message,'error');await Promise.all([loadAnnouncements(),loadNotifications()]);$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published and personnel notified.','success');};
+    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){if(editing){Object.assign(existing,data);}else{state.announcements.unshift({id:`a-${Date.now()}`,...data,created_by:state.user.id,created_at:new Date().toISOString()});state.notifications.unshift({id:`n-${Date.now()}`,title:`COMMAND BULLETIN: ${data.title}`,body:data.body,read:false,created_at:new Date().toISOString()});updateNotificationBadge();}$('#modalRoot').innerHTML='';renderAdmin();toast(editing?'Bulletin updated.':'Bulletin published and personnel notified.','success');return;}const q=editing?db.from('announcements').update(data).eq('id',existing.id):db.from('announcements').insert({...data,created_by:state.user.id});const {error}=await q;if(error)return toast(error.message,'error');await Promise.all([loadAnnouncements(),loadNotifications()]);$('#modalRoot').innerHTML='';renderAdmin();toast(editing?'Bulletin updated.':'Bulletin published and personnel notified.','success');};
+  }
+
+  async function deleteAnnouncement(id){
+    const a=state.announcements.find(x=>x.id===id);if(!a)return;
+    if(!(isOwner()||a.created_by===state.user?.id))return toast('You may only delete bulletins you issued.','error');
+    if(!confirm(`Delete bulletin “${a.title}”? This cannot be undone.`))return;
+    if(state.demo){state.announcements=state.announcements.filter(x=>x.id!==id);renderAdmin();toast('Bulletin deleted.','success');return;}
+    const {error}=await db.from('announcements').delete().eq('id',id);if(error)return toast(error.message,'error');await loadAnnouncements();renderAdmin();toast('Bulletin deleted.','success');
   }
 
   function bindEvents() {

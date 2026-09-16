@@ -320,9 +320,9 @@ create policy announcements_select_authenticated on public.announcements for sel
 drop policy if exists announcements_insert_command on public.announcements;
 create policy announcements_insert_command on public.announcements for insert to authenticated with check (public.is_command_staff());
 drop policy if exists announcements_update_command on public.announcements;
-create policy announcements_update_command on public.announcements for update to authenticated using (public.is_command_staff()) with check (public.is_command_staff());
+create policy announcements_update_command on public.announcements for update to authenticated using (created_by = auth.uid() or public.is_owner()) with check (created_by = auth.uid() or public.is_owner());
 drop policy if exists announcements_delete_command on public.announcements;
-create policy announcements_delete_command on public.announcements for delete to authenticated using (public.is_command_staff());
+create policy announcements_delete_command on public.announcements for delete to authenticated using (created_by = auth.uid() or public.is_owner());
 
 -- Site settings: everyone authenticated can read; Command Staff can update.
 drop policy if exists site_settings_select_authenticated on public.site_settings;
