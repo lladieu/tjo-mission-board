@@ -228,6 +228,13 @@
     if(error) throw error;
     if(!user) { setUser(null); showView('auth'); return; }
     const profile = await getProfile(user.id);
+    if((profile.account_status||'active') !== 'active') {
+      const status=(profile.account_status||'restricted').toUpperCase();
+      await db.auth.signOut();
+      setUser(null); showView('auth');
+      toast(`ACCESS DENIED — ACCOUNT ${status}. Contact Mission Board command.`, 'error');
+      return;
+    }
     setUser(profile);
     await Promise.all([loadMissions(), loadApplications(), loadNotifications()]);
     await loadAnnouncements();
@@ -349,12 +356,36 @@
     $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>PERSONNEL</th><th>MISSION</th><th>RANK</th><th>REQUESTED</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${apps.length?apps.map(a=>{const m=state.missions.find(x=>x.id===a.mission_id); const actions=a.status==='pending'?`<button class="mini-btn approve" data-approve="${esc(a.id)}">APPROVE</button><button class="mini-btn danger" data-decline="${esc(a.id)}">DECLINE</button>`:a.status==='approved'?`<button class="mini-btn danger" data-remove="${esc(a.id)}">REMOVE</button>`:'—'; return `<tr><td>${esc(a.character_name||'Jedi Personnel')}</td><td>${esc(m?.name||'Unknown')}</td><td>${esc(a.rank||'—')}</td><td>${esc(dateFmt(a.created_at||new Date().toISOString()))}</td><td>${esc(a.status.toUpperCase())}</td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="6"><div class="empty">No assignment requests.</div></td></tr>`}</tbody></table></div>`;
     $$('[data-approve]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.approve,'approved'));$$('[data-decline]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.decline,'declined'));$$('[data-remove]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.remove,'removed'));
   }
-  function renderAdminPersonnel(){
+  async function renderAdminPersonnel(){
+    // Refresh the personnel directory whenever Command opens this tab.
+    if(!state.demo && isCommand()) {
+      $('#adminContent').innerHTML=`<div class="admin-card"><div class="empty"><strong>ACCESSING PERSONNEL DIRECTORY</strong>Synchronizing registered Jedi personnel...</div></div>`;
+      const {data,error}=await db.from('profiles').select('*').order('character_name',{ascending:true});
+      if(error){
+        $('#adminContent').innerHTML=`<div class="admin-card"><div class="empty"><strong>PERSONNEL DIRECTORY UNAVAILABLE</strong>${esc(error.message)}</div></div>`;
+        return;
+      }
+      state.profiles=data||[];
+    }
     const profiles=state.profiles.length?state.profiles:[state.user].filter(Boolean);
-    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>ACTIONS</th></tr></thead><tbody>${profiles.map(p=>`<tr><td>${esc(p.character_name)}</td><td>${esc(p.roblox_user)}</td><td>${esc(p.rank)}</td><td>${esc(p.pathway)}</td><td>${esc(p.class)}</td><td>${esc(roleLabel(p.role))}</td><td><div class="admin-actions"><button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>${isOwner()?`<button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">JEDI ORDER PERSONNEL DIRECTORY</span><h3 style="font:700 16px Orbitron;margin:6px 0">REGISTERED PERSONNEL — ${profiles.length}</h3></div></div><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${profiles.length?profiles.map(p=>{const status=(p.account_status||'active').toUpperCase(); const ownerActions=isOwner()&&p.id!==state.user?.id?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button><button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>${status==='ACTIVE'?`<button class="mini-btn danger" data-kick="${esc(p.id)}">KICK</button><button class="mini-btn danger" data-ban="${esc(p.id)}">BAN</button>`:`<button class="mini-btn approve" data-restore="${esc(p.id)}">RESTORE ACCESS</button>`}`:(p.id===state.user?.id?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>`:'—'); return `<tr><td>${esc(p.character_name||'PROFILE INCOMPLETE')}</td><td>${esc(p.roblox_user||'—')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td>${esc(roleLabel(p.role))}</td><td><strong>${esc(status)}</strong></td><td><div class="admin-actions">${ownerActions}</div></td></tr>`}).join(''):`<tr><td colspan="8"><div class="empty">No registered personnel found.</div></td></tr>`}</tbody></table></div>`;
     $$('[data-role]').forEach(b=>b.onclick=()=>changeRole(b.dataset.role));
     $$('[data-profile-edit]').forEach(b=>b.onclick=()=>openProfileModal(profiles.find(p=>p.id===b.dataset.profileEdit), false));
-    if(!state.demo && isSuper()) db.from('profiles').select('*').order('character_name').then(({data})=>{state.profiles=data||[];renderAdminPersonnel();});
+    $$('[data-kick]').forEach(b=>b.onclick=()=>setPersonnelAccess(b.dataset.kick,'kicked'));
+    $$('[data-ban]').forEach(b=>b.onclick=()=>setPersonnelAccess(b.dataset.ban,'banned'));
+    $$('[data-restore]').forEach(b=>b.onclick=()=>setPersonnelAccess(b.dataset.restore,'active'));
+  }
+  async function setPersonnelAccess(id,status){
+    if(!isOwner()) return toast('Owner authorization required.','error');
+    const p=state.profiles.find(x=>x.id===id); if(!p || id===state.user?.id) return;
+    const verb=status==='banned'?'BAN':status==='kicked'?'KICK':'RESTORE ACCESS FOR';
+    const warning=status==='banned'?'This player will be denied Mission Terminal access until restored.':status==='kicked'?'This player will be denied Mission Terminal access until restored. Their personnel record and history will be preserved.':'This player will be able to access the Mission Terminal again.';
+    if(!confirm(`${verb} ${p.character_name||p.roblox_user||'this player'}?\n\n${warning}`)) return;
+    if(state.demo){p.account_status=status;renderAdminPersonnel();toast(`Personnel access set to ${status}.`,'success');return;}
+    const {error}=await db.from('profiles').update({account_status:status}).eq('id',id);
+    if(error)return toast(error.message,'error');
+    toast(status==='active'?'Personnel access restored.':status==='banned'?'Personnel banned from the terminal.':'Personnel kicked from the terminal.','success');
+    renderAdminPersonnel();
   }
   function renderAdminAnnouncements(){
     $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>`<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time></div>`).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;

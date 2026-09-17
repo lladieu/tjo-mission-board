@@ -25,6 +25,7 @@ create table if not exists public.profiles (
   pathway text,
   class text,
   role public.user_role not null default 'player',
+  account_status text not null default 'active' check (account_status in ('active','kicked','banned')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -284,6 +285,19 @@ end; $$;
 
 drop trigger if exists prevent_role_escalation_trigger on public.profiles;
 create trigger prevent_role_escalation_trigger before update on public.profiles for each row execute procedure public.prevent_role_escalation();
+
+-- Only the Owner may kick, ban, or restore account access.
+create or replace function public.prevent_account_status_change()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if new.account_status is distinct from old.account_status and not public.is_owner() then
+    raise exception 'Only the Owner may change personnel access status';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists prevent_account_status_change_trigger on public.profiles;
+create trigger prevent_account_status_change_trigger before update on public.profiles for each row execute procedure public.prevent_account_status_change();
 
 drop policy if exists profiles_update_command on public.profiles;
 create policy profiles_update_command on public.profiles for update to authenticated using (public.is_command_staff()) with check (public.is_command_staff());
