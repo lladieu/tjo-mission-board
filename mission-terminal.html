@@ -657,9 +657,22 @@ button { cursor: pointer; }
   }
 
   async function setApplicationStatus(id,status) {
+    if(!isCommand()) return toast('Command authorization required.','error');
     const app=state.applications.find(a=>a.id===id); if(!app) return;
     if(state.demo){app.status=status;toast(`Request ${status}.`,'success');renderAdmin();renderMissionDetail();return;}
     const {error}=await db.from('mission_applications').update({status}).eq('id',id);if(error)return toast(error.message,'error');await loadApplications();toast(`Request ${status}.`,'success');renderAdmin();
+  }
+
+  async function deleteApplication(id) {
+    if(!isCommand()) return toast('Command authorization required.','error');
+    const app=state.applications.find(a=>a.id===id); if(!app) return;
+    const mission=state.missions.find(m=>m.id===app.mission_id);
+    const personnel=app.character_name||app.profile?.character_name||'this applicant';
+    if(!confirm(`Delete ${personnel}'s application${mission?` for ${mission.name}`:''}? This cannot be undone.`)) return;
+    if(state.demo){state.applications=state.applications.filter(a=>a.id!==id);toast('Application deleted.','success');renderAdmin();return;}
+    const {error}=await db.from('mission_applications').delete().eq('id',id);
+    if(error)return toast(error.message,'error');
+    await loadApplications();toast('Application deleted.','success');renderAdmin();
   }
 
   function renderAdmin() {
@@ -681,8 +694,10 @@ button { cursor: pointer; }
   }
   function renderAdminApplications(){
     const apps=[...state.applications].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>PERSONNEL</th><th>MISSION</th><th>RANK</th><th>REQUESTED</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${apps.length?apps.map(a=>{const m=state.missions.find(x=>x.id===a.mission_id); const actions=a.status==='pending'?`<button class="mini-btn approve" data-approve="${esc(a.id)}">APPROVE</button><button class="mini-btn danger" data-decline="${esc(a.id)}">DECLINE</button>`:a.status==='approved'?`<button class="mini-btn danger" data-remove="${esc(a.id)}">REMOVE</button>`:'—'; return `<tr><td>${esc(a.character_name||'Jedi Personnel')}</td><td>${esc(m?.name||'Unknown')}</td><td>${esc(a.rank||'—')}</td><td>${esc(dateFmt(a.created_at||new Date().toISOString()))}</td><td>${esc(a.status.toUpperCase())}</td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="6"><div class="empty">No assignment requests.</div></td></tr>`}</tbody></table></div>`;
-    $$('[data-approve]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.approve,'approved'));$$('[data-decline]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.decline,'declined'));$$('[data-remove]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.remove,'removed'));
+    $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>PERSONNEL</th><th>MISSION</th><th>RANK</th><th>REQUESTED</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${apps.length?apps.map(a=>{const m=state.missions.find(x=>x.id===a.mission_id); const decisionActions=a.status==='pending'?`<button class="mini-btn approve" data-accept="${esc(a.id)}">ACCEPT</button><button class="mini-btn danger" data-deny="${esc(a.id)}">DENY</button>`:''; const actions=`${decisionActions}<button class="mini-btn danger" data-app-delete="${esc(a.id)}">DELETE</button>`; return `<tr><td>${esc(a.character_name||'Jedi Personnel')}</td><td>${esc(m?.name||'Unknown')}</td><td>${esc(a.rank||'—')}</td><td>${esc(dateFmt(a.created_at||new Date().toISOString()))}</td><td>${esc(a.status.toUpperCase())}</td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="6"><div class="empty">No assignment requests.</div></td></tr>`}</tbody></table></div>`;
+    $$('[data-accept]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.accept,'approved'));
+    $$('[data-deny]').forEach(b=>b.onclick=()=>setApplicationStatus(b.dataset.deny,'declined'));
+    $$('[data-app-delete]').forEach(b=>b.onclick=()=>deleteApplication(b.dataset.appDelete));
   }
   async function renderAdminPersonnel(){
     if(!state.demo && isCommand()) {

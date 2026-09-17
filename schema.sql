@@ -400,3 +400,7 @@ drop policy if exists personnel_options_update_owner on public.personnel_options
 create policy personnel_options_update_owner on public.personnel_options for update to authenticated using (public.is_owner()) with check (public.is_owner());
 drop policy if exists personnel_options_delete_owner on public.personnel_options;
 create policy personnel_options_delete_owner on public.personnel_options for delete to authenticated using (public.is_owner());
+
+-- Command Staff+ may permanently delete mission applications.
+drop policy if exists applications_delete_command on public.mission_applications;
+create policy applications_delete_command on public.mission_applications for delete to authenticated using (public.is_command_staff());
