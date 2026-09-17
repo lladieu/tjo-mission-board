@@ -390,7 +390,27 @@ button { cursor: pointer; }
 
   function renderServiceLeaderboard() {
     const rows=state.leaderboard||[];
-    $('#serviceLeaderboard').innerHTML=`<div class="admin-card">${rows.length?`<table class="admin-table"><thead><tr><th>POSITION</th><th>CHARACTER</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>MISSIONS</th></tr></thead><tbody>${rows.map((p,i)=>`<tr><td><span class="leaderboard-rank">#${i+1}</span></td><td>${esc(p.character_name||'Unnamed Jedi')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td><strong>${Number(p.mission_count||0)}</strong></td></tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE RECORDS</strong>Personnel will appear after their records are established.</div>`}</div>`;
+    $('#serviceLeaderboard').innerHTML=`<div class="admin-card">${rows.length?`<table class="admin-table"><thead><tr><th>POSITION</th><th>CHARACTER</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>MISSIONS</th>${isOwner()?'<th>OWNER ACTIONS</th>':''}</tr></thead><tbody>${rows.map((p,i)=>`<tr><td><span class="leaderboard-rank">#${i+1}</span></td><td>${esc(p.character_name||'Unnamed Jedi')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td><strong>${Number(p.mission_count||0)}</strong></td>${isOwner()?`<td><button class="mini-btn" data-manage-record="${esc(p.user_id)}">MANAGE RECORD</button></td>`:''}</tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE RECORDS</strong>Personnel will appear after their records are established.</div>`}</div>`;
+    $$('[data-manage-record]').forEach(b=>b.onclick=()=>openServiceRecordManager(b.dataset.manageRecord));
+  }
+
+  function openServiceRecordManager(userId) {
+    if(!isOwner()) return toast('Owner authorization required.','error');
+    const person=(state.leaderboard||[]).find(p=>p.user_id===userId);
+    const entries=state.applications.filter(a=>a.user_id===userId && a.status==='approved').map(a=>({a,m:state.missions.find(m=>m.id===a.mission_id)})).filter(x=>x.m);
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">OWNER // SERVICE RECORD CONTROL</span><h2>${esc(person?.character_name||'JEDI PERSONNEL')}</h2></div><button class="close-btn" id="closeModal">×</button></div><div class="auth-note" style="margin-bottom:16px">Deleting an entry removes that approved mission assignment from this player's service record and mission roster. This cannot be undone.</div>${entries.length?`<table class="admin-table"><thead><tr><th>MISSION</th><th>TYPE</th><th>DATE</th><th>ACTION</th></tr></thead><tbody>${entries.map(x=>`<tr><td>${esc(x.m.name)}</td><td>${esc(x.m.type)}</td><td>${esc(dateFmt(x.m.date))}</td><td><button class="mini-btn danger" data-service-delete="${esc(x.a.id)}">DELETE ENTRY</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE ENTRIES</strong>This personnel record has no approved mission assignments.</div>`}<div class="modal-actions"><button class="ghost-btn" id="cancelModal">CLOSE</button></div></div></div>`;
+    $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
+    $$('[data-service-delete]').forEach(b=>b.onclick=()=>deleteServiceRecordEntry(b.dataset.serviceDelete,userId));
+  }
+
+  async function deleteServiceRecordEntry(applicationId,userId) {
+    if(!isOwner()) return toast('Owner authorization required.','error');
+    const app=state.applications.find(a=>a.id===applicationId); const mission=state.missions.find(m=>m.id===app?.mission_id);
+    if(!app || !confirm(`Delete this service record entry${mission?` for ${mission.name}`:''}?\n\nThis also removes the approved roster assignment and cannot be undone.`)) return;
+    if(state.demo){state.applications=state.applications.filter(a=>a.id!==applicationId);await loadLeaderboard();renderServiceLeaderboard();openServiceRecordManager(userId);toast('Service record entry deleted.','success');return;}
+    const {error}=await db.from('mission_applications').delete().eq('id',applicationId).eq('status','approved');
+    if(error) return toast(error.message,'error');
+    await Promise.all([loadApplications(),loadLeaderboard()]); renderServiceLeaderboard(); openServiceRecordManager(userId); toast('Service record entry deleted.','success');
   }
 
   function renderDashboard() {
@@ -522,12 +542,15 @@ button { cursor: pointer; }
     if(error) throw error;
     if(!user) { setUser(null); showView('auth'); return; }
     const profile = await getProfile(user.id);
-    if((profile.account_status||'active') !== 'active') {
-      const status=(profile.account_status||'restricted').toUpperCase();
-      await db.auth.signOut();
-      setUser(null); showView('auth');
-      toast(`ACCESS DENIED — ACCOUNT ${status}. Contact Mission Board command.`, 'error');
-      return;
+    const accessStatus=(profile.account_status||'active');
+    if(accessStatus === 'banned') {
+      await db.auth.signOut(); setUser(null); showView('auth');
+      toast('ACCESS DENIED — ACCOUNT BANNED. Contact Mission Board command for restoration.', 'error'); return;
+    }
+    if(accessStatus === 'kicked') {
+      await db.from('profiles').update({account_status:'active'}).eq('id',user.id);
+      await db.auth.signOut(); setUser(null); showView('auth');
+      toast('SESSION TERMINATED BY COMMAND. You may sign in again immediately.', 'error'); return;
     }
     setUser(profile);
     await Promise.all([loadMissions(), loadDirectory(), loadApplications(), loadNotifications()]);
@@ -707,7 +730,7 @@ button { cursor: pointer; }
       state.profiles=data||[];
     }
     const profiles=state.profiles.length?state.profiles:[state.user].filter(Boolean);
-    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">JEDI ORDER PERSONNEL DIRECTORY</span><h3 style="font:700 16px Orbitron;margin:6px 0">REGISTERED PERSONNEL — ${profiles.length}</h3></div></div><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${profiles.length?profiles.map(p=>{const status=(p.account_status||'active').toUpperCase();const self=p.id===state.user?.id;const actions=isOwner()?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>${self?'':`<button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>${status==='ACTIVE'?`<button class="mini-btn danger" data-kick="${esc(p.id)}">KICK</button><button class="mini-btn danger" data-ban="${esc(p.id)}">BAN</button>`:`<button class="mini-btn approve" data-restore="${esc(p.id)}">RESTORE ACCESS</button>`}`}`:'—';return `<tr><td>${esc(p.character_name||'PROFILE INCOMPLETE')}</td><td>${esc(p.roblox_user||'—')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td>${esc(roleLabel(p.role))}</td><td><strong>${esc(status)}</strong></td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="8"><div class="empty">No registered personnel found.</div></td></tr>`}</tbody></table></div>`;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">JEDI ORDER PERSONNEL DIRECTORY</span><h3 style="font:700 16px Orbitron;margin:6px 0">REGISTERED PERSONNEL — ${profiles.length}</h3></div></div><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${profiles.length?profiles.map(p=>{const status=(p.account_status||'active').toUpperCase();const self=p.id===state.user?.id;const actions=isOwner()?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>${self?'':`<button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>${status==='BANNED'?`<button class="mini-btn approve" data-restore="${esc(p.id)}">UNBAN / RESTORE ACCESS</button>`:`<button class="mini-btn danger" data-kick="${esc(p.id)}">KICK</button><button class="mini-btn danger" data-ban="${esc(p.id)}">BAN</button>`}`}`:'—';return `<tr><td>${esc(p.character_name||'PROFILE INCOMPLETE')}</td><td>${esc(p.roblox_user||'—')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td>${esc(roleLabel(p.role))}</td><td><strong>${esc(status)}</strong></td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="8"><div class="empty">No registered personnel found.</div></td></tr>`}</tbody></table></div>`;
     $$('[data-role]').forEach(b=>b.onclick=()=>changeRole(b.dataset.role));
     $$('[data-profile-edit]').forEach(b=>b.onclick=()=>openProfileModal(profiles.find(p=>p.id===b.dataset.profileEdit), false));
     $$('[data-kick]').forEach(b=>b.onclick=()=>setPersonnelAccess(b.dataset.kick,'kicked'));
@@ -718,12 +741,12 @@ button { cursor: pointer; }
     if(!isOwner()) return toast('Owner authorization required.','error');
     const p=state.profiles.find(x=>x.id===id); if(!p || id===state.user?.id) return;
     const verb=status==='banned'?'BAN':status==='kicked'?'KICK':'RESTORE ACCESS FOR';
-    const warning=status==='banned'?'This player will be denied Mission Terminal access until restored.':status==='kicked'?'This player will be denied Mission Terminal access until restored. Their personnel record and history will be preserved.':'This player will be able to access the Mission Terminal again.';
+    const warning=status==='banned'?'This player will be denied Mission Terminal access until you restore them.':status==='kicked'?'This terminates their current/next session once. They may sign back in immediately afterward.':'This removes the ban and restores Mission Terminal access.';
     if(!confirm(`${verb} ${p.character_name||p.roblox_user||'this player'}?\n\n${warning}`)) return;
     if(state.demo){p.account_status=status;renderAdminPersonnel();toast(`Personnel access set to ${status}.`,'success');return;}
     const {error}=await db.from('profiles').update({account_status:status}).eq('id',id);
     if(error)return toast(error.message,'error');
-    toast(status==='active'?'Personnel access restored.':status==='banned'?'Personnel banned from the terminal.':'Personnel kicked from the terminal.','success');
+    toast(status==='active'?'Ban removed — personnel access restored.':status==='banned'?'Personnel banned until manually restored.':'Kick issued — the player may sign back in after their session is terminated.','success');
     await renderAdminPersonnel();
   }
   function renderAdminAnnouncements(){
@@ -945,6 +968,15 @@ button { cursor: pointer; }
     $('#newMissionBtn').onclick=()=>openMissionModal();
   }
 
+  async function enforceAccountAccess() {
+    if(state.demo || !state.user || !db) return;
+    const userId=state.user.id;
+    const {data,error}=await db.from('profiles').select('account_status').eq('id',userId).single();
+    if(error || !data) return;
+    if(data.account_status==='banned') { await db.auth.signOut(); setUser(null); showView('auth'); toast('ACCESS REVOKED — YOUR ACCOUNT HAS BEEN BANNED. Contact Mission Board command.', 'error'); }
+    else if(data.account_status==='kicked') { await db.from('profiles').update({account_status:'active'}).eq('id',userId); await db.auth.signOut(); setUser(null); showView('auth'); toast('SESSION TERMINATED BY COMMAND. You may sign in again immediately.', 'error'); }
+  }
+
   async function init() {
     bindEvents();
     if(!LIVE) {
@@ -963,6 +995,7 @@ button { cursor: pointer; }
     }
   }
   init();
+  setInterval(enforceAccountAccess, 10000);
 })();
 
   </script>

@@ -1,0 +1,17 @@
+Jedi Mission Board v14
+
+Changes:
+- KICK is now temporary. It terminates the targeted player's current/next session once, automatically returns account_status to active, and allows them to sign back in immediately.
+- BAN remains persistent and blocks login until the Owner explicitly restores access.
+- Banned personnel now show a clear "UNBAN / RESTORE ACCESS" button in Command > Personnel.
+- Owner can manage Service Records from the SERVICE RECORD page. Click MANAGE RECORD beside a player, then DELETE ENTRY beside an approved mission assignment.
+- Deleting a service record entry also removes that approved mission roster assignment because the service record is derived from approved mission applications.
+- Existing Command application ACCEPT / DENY / DELETE controls are preserved.
+
+Database:
+- No new SQL migration is required if upgrade-v13.sql was already run.
+
+Deployment:
+- Replace the root index.html on GitHub Pages with this version.
+- Uploading all files is recommended to keep the repository synchronized.
+- Hard refresh after deployment (Ctrl+F5).

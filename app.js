@@ -9,8 +9,11 @@
   const LIVE = Boolean(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
   const db = LIVE ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
 
-  const WARFRONT_TYPES = ['Assault','Defense','Recon','Sabotage','Intelligence','Supply','Aid','Escort','Search & Rescue','Elimination','Special Operations'];
-  const JEDI_TYPES = ['Artifact Recovery','Diplomacy','Research','Recon','Temple Operations','Support','Investigation','Exploration','Judicial','Special Operations'];
+  const DEFAULT_MISSION_TYPES = {
+    WARFRONT: ['Assault','Defense','Recon','Sabotage','Intelligence','Supply','Aid','Escort','Search & Rescue','Elimination','Special Operations'],
+    JEDI: ['Artifact Recovery','Diplomacy','Research','Recon','Temple Operations','Support','Investigation','Exploration','Judicial','Special Operations']
+  };
+  const DEFAULT_PLANETS = ['Alderaan','Balmorra','Corellia','Coruscant','Dromund Kaas','Korriban','Nar Shaddaa','Ord Mantell','Taris','Tython'];
   const THREATS = ['LOW','MODERATE','HIGH','CRITICAL'];
   const STATUS = ['OPEN','IN_PROGRESS','COMPLETED','CANCELLED'];
 
@@ -35,7 +38,12 @@
     notifications: [],
     profiles: [],
     announcements: [],
+    leaderboard: [],
     settings: {terminal_name:'MISSION TERMINAL', command_name:'JEDI ORDER // OPERATIONS COMMAND', footer_text:'SECURE • AUTHORIZED PERSONNEL ONLY', system_status:'SECURE CHANNEL'},
+    personnelOptions: {rank:['Padawan','Knight','Master'], pathway:['Guardian','Consular','Sentinel','None'], class:['Weapon Master','Battlemaster','Instructor','Investigator','Shadow','Lorekeeper','Sage','Minor Council','High Council','Master of the Order','Grandmaster of the Order','None']},
+    blockedTerms: [],
+    missionTypes: {WARFRONT:[...DEFAULT_MISSION_TYPES.WARFRONT], JEDI:[...DEFAULT_MISSION_TYPES.JEDI]},
+    planets: [...DEFAULT_PLANETS],
     currentMission: null,
     currentView: 'dashboard',
     category: 'ALL',
@@ -70,6 +78,7 @@
 
   function setUser(user) {
     state.user = user;
+    $('#siteNav')?.classList.toggle('hidden', !user);
     $('#topUserName').textContent = user ? (user.character_name || user.discord_user || 'JEDI') : 'UNAUTHENTICATED';
     $('#topUserRole').textContent = user ? roleLabel(user.role) : 'VIEWER';
     $('.avatar').textContent = user ? initials(user.character_name || user.discord_user) : 'J';
@@ -86,9 +95,12 @@
     $$('.page-view, #authView').forEach(x => x.classList.add('hidden'));
     const target = view === 'auth' ? $('#authView') : $(`#${view}View`);
     if(target) target.classList.remove('hidden');
+    $$('#siteNav .nav-tab').forEach(b=>b.classList.toggle('active', (view==='operations'||view==='mission') ? b.dataset.view==='dashboard' : b.dataset.view===view));
+    if(view === 'bulletin') renderBulletin();
     if(view === 'dashboard') renderDashboard();
     if(view === 'operations') renderOperations();
     if(view === 'mission') renderMissionDetail();
+    if(view === 'service') renderServiceLeaderboard();
     if(view === 'profile') renderProfile();
     if(view === 'admin') renderAdmin();
   }
@@ -106,7 +118,7 @@
     return `<article class="mission-card ${['HIGH','CRITICAL'].includes(m.threat_level)?'high':''}" data-mission-id="${esc(m.id)}">
       <div class="card-top"><span class="code">${esc(m.code || 'JO-NEW')}</span><span class="threat ${threatClass(m.threat_level)}">${esc(m.threat_level)} THREAT</span></div>
       <h3>${esc(m.name)}</h3>
-      <div class="location">${esc(m.location)}</div>
+      <div class="location">${esc(m.planet ? `${m.planet} — ${m.location}` : m.location)}</div>
       <div class="briefing-preview">${esc(m.briefing)}</div>
       <div class="card-footer">
         <div class="metric"><label>TYPE</label><strong>${esc(m.type)}</strong></div>
@@ -115,6 +127,36 @@
       </div>
       <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px"><span>${esc(m.main_category)} // ${esc(m.type)}</span><span>${full?'FULL':'VIEW BRIEFING →'}</span></div>
     </article>`;
+  }
+
+  function renderBulletin() {
+    const items=[...state.announcements].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    $('#bulletinList').innerHTML = items.length ? items.map(a=>`<article class="holo-panel bulletin-card"><span class="eyebrow">COMMAND BULLETIN</span><h3>${esc(a.title)}</h3><p style="color:var(--muted);line-height:1.65;white-space:pre-wrap">${esc(a.body)}</p><div class="bulletin-meta">TRANSMITTED ${esc(dateFmt(a.created_at))}</div></article>`).join('') : `<div class="empty"><strong>NO ACTIVE BULLETINS</strong>Command has not issued any announcements.</div>`;
+  }
+
+  function renderServiceLeaderboard() {
+    const rows=state.leaderboard||[];
+    $('#serviceLeaderboard').innerHTML=`<div class="admin-card">${rows.length?`<table class="admin-table"><thead><tr><th>POSITION</th><th>CHARACTER</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>MISSIONS</th>${isOwner()?'<th>OWNER ACTIONS</th>':''}</tr></thead><tbody>${rows.map((p,i)=>`<tr><td><span class="leaderboard-rank">#${i+1}</span></td><td>${esc(p.character_name||'Unnamed Jedi')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td><strong>${Number(p.mission_count||0)}</strong></td>${isOwner()?`<td><button class="mini-btn" data-manage-record="${esc(p.user_id)}">MANAGE RECORD</button></td>`:''}</tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE RECORDS</strong>Personnel will appear after their records are established.</div>`}</div>`;
+    $$('[data-manage-record]').forEach(b=>b.onclick=()=>openServiceRecordManager(b.dataset.manageRecord));
+  }
+
+  function openServiceRecordManager(userId) {
+    if(!isOwner()) return toast('Owner authorization required.','error');
+    const person=(state.leaderboard||[]).find(p=>p.user_id===userId);
+    const entries=state.applications.filter(a=>a.user_id===userId && a.status==='approved').map(a=>({a,m:state.missions.find(m=>m.id===a.mission_id)})).filter(x=>x.m);
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">OWNER // SERVICE RECORD CONTROL</span><h2>${esc(person?.character_name||'JEDI PERSONNEL')}</h2></div><button class="close-btn" id="closeModal">×</button></div><div class="auth-note" style="margin-bottom:16px">Deleting an entry removes that approved mission assignment from this player's service record and mission roster. This cannot be undone.</div>${entries.length?`<table class="admin-table"><thead><tr><th>MISSION</th><th>TYPE</th><th>DATE</th><th>ACTION</th></tr></thead><tbody>${entries.map(x=>`<tr><td>${esc(x.m.name)}</td><td>${esc(x.m.type)}</td><td>${esc(dateFmt(x.m.date))}</td><td><button class="mini-btn danger" data-service-delete="${esc(x.a.id)}">DELETE ENTRY</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty"><strong>NO SERVICE ENTRIES</strong>This personnel record has no approved mission assignments.</div>`}<div class="modal-actions"><button class="ghost-btn" id="cancelModal">CLOSE</button></div></div></div>`;
+    $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
+    $$('[data-service-delete]').forEach(b=>b.onclick=()=>deleteServiceRecordEntry(b.dataset.serviceDelete,userId));
+  }
+
+  async function deleteServiceRecordEntry(applicationId,userId) {
+    if(!isOwner()) return toast('Owner authorization required.','error');
+    const app=state.applications.find(a=>a.id===applicationId); const mission=state.missions.find(m=>m.id===app?.mission_id);
+    if(!app || !confirm(`Delete this service record entry${mission?` for ${mission.name}`:''}?\n\nThis also removes the approved roster assignment and cannot be undone.`)) return;
+    if(state.demo){state.applications=state.applications.filter(a=>a.id!==applicationId);await loadLeaderboard();renderServiceLeaderboard();openServiceRecordManager(userId);toast('Service record entry deleted.','success');return;}
+    const {error}=await db.from('mission_applications').delete().eq('id',applicationId).eq('status','approved');
+    if(error) return toast(error.message,'error');
+    await Promise.all([loadApplications(),loadLeaderboard()]); renderServiceLeaderboard(); openServiceRecordManager(userId); toast('Service record entry deleted.','success');
   }
 
   function renderDashboard() {
@@ -147,7 +189,7 @@
     const action = canJoin ? `<button class="primary-btn" id="applyBtn">REQUEST ASSIGNMENT</button>` : mine ? `<button class="ghost-btn" id="withdrawBtn">WITHDRAW REQUEST</button>` : approved.length>=m.required_personnel ? `<button class="ghost-btn" disabled>MISSION FULL</button>` : '';
     const adminActions = isCommand() ? `<button class="ghost-btn" id="editMissionBtn">EDIT</button><button class="danger-btn" id="deleteMissionBtn">DELETE</button>` : '';
     $('#missionDetail').innerHTML = `<div class="detail-panel">
-      <div class="detail-head"><div><span class="code">${esc(m.code || 'JO-NEW')} // ${esc(m.main_category)}</span><h1>${esc(m.name)}</h1><div class="location">${esc(m.location)}</div></div><div class="detail-actions">${action}${adminActions}</div></div>
+      <div class="detail-head"><div><span class="code">${esc(m.code || 'JO-NEW')} // ${esc(m.main_category)}</span><h1>${esc(m.name)}</h1><div class="location">${esc(m.planet ? `${m.planet} — ${m.location}` : m.location)}</div></div><div class="detail-actions">${action}${adminActions}</div></div>
       <div class="detail-meta"><div><label>MISSION TYPE</label><strong>${esc(m.type)}</strong></div><div><label>THREAT LEVEL</label><strong style="color:${m.threat_level==='CRITICAL'?'var(--danger)':m.threat_level==='HIGH'?'var(--warn)':'var(--cyan)'}">${esc(m.threat_level)}</strong></div><div><label>REQUIRED</label><strong>${esc(m.required_personnel)} PERSONNEL</strong></div><div><label>JEDI LEAD</label><strong>${esc(m.jedi_lead)}</strong></div><div><label>DATE</label><strong>${esc(dateFmt(m.date))}</strong></div></div>
       <div class="briefing"><h3>MISSION BRIEFING</h3><p>${esc(m.briefing)}</p>${m.result_summary?`<h3 style="margin-top:24px">OFFICIAL RESULT</h3><p>${esc(m.result_summary)}</p>`:''}</div>
       <div class="roster"><h3>PERSONNEL ROSTER — ${approved.length}/${esc(m.required_personnel)}</h3><div class="roster-list">${approved.length ? approved.map(a=>`<div class="roster-item"><span>${esc(a.character_name || a.profile?.character_name || 'Jedi')}</span><small>${esc(a.rank || a.profile?.rank || '')}</small></div>`).join('') : `<div class="empty" style="grid-column:1/-1">No approved personnel assigned.</div>`}</div></div>
@@ -163,13 +205,21 @@
     const u = state.user;
     if(!u) return showView('auth');
     const history = state.applications.filter(a=>a.user_id===u.id && a.status==='approved').map(a=>({a,m:state.missions.find(m=>m.id===a.mission_id)})).filter(x=>x.m);
-    $('#profilePanel').innerHTML = `<div class="profile-card">
+    $('#profilePanel').innerHTML = `<div class="category-tabs"><button class="tab active" id="serviceRecordTab">SERVICE RECORD</button><button class="tab" id="editAccountTab">EDIT ACCOUNT</button></div><div id="profileTabContent"></div>`;
+    const service=()=>{ $('#serviceRecordTab').classList.add('active'); $('#editAccountTab').classList.remove('active'); $('#profileTabContent').innerHTML=`<div class="profile-card">
       <div class="profile-head"><div class="profile-avatar">${esc(initials(u.character_name||u.discord_user))}</div><div><h2>${esc(u.character_name||'Jedi Personnel')}</h2><p>${esc(u.discord_user||'Discord identity not recorded')}</p></div><div class="role-pill">${esc(roleLabel(u.role))}</div></div><div style="display:flex;gap:8px;margin:15px 0 0"><button class="ghost-btn" id="editOwnProfileBtn">EDIT PERSONNEL RECORD</button><button class="danger-btn" id="signOutBtn">END SESSION</button></div>
       <div class="profile-grid"><div><label>ROBLOX USER</label><strong>${esc(u.roblox_user||'—')}</strong></div><div><label>RANK</label><strong>${esc(u.rank||'—')}</strong></div><div><label>PATHWAY</label><strong>${esc(u.pathway||'—')}</strong></div><div><label>CLASS</label><strong>${esc(u.class||'—')}</strong></div><div><label>MISSIONS</label><strong>${history.length}</strong></div></div>
       <h3 style="font:700 13px Orbitron;color:var(--cyan);letter-spacing:.1em;margin:25px 0 12px">OPERATIONAL HISTORY</h3>
       ${history.length ? `<table class="history-table"><thead><tr><th>MISSION</th><th>TYPE</th><th>LOCATION</th><th>DATE</th><th>STATUS</th></tr></thead><tbody>${history.map(x=>`<tr><td>${esc(x.m.name)}</td><td>${esc(x.m.type)}</td><td>${esc(x.m.location)}</td><td>${esc(dateFmt(x.m.date))}</td><td style="color:var(--success)">ASSIGNED</td></tr>`).join('')}</tbody></table>` : `<div class="empty"><strong>NO COMPLETED ASSIGNMENTS</strong>Your approved mission history will appear here.</div>`}
-    </div>`;
-    bindProfileActions();
+    </div>`; bindProfileActions(); };
+    const account=async()=>{ $('#serviceRecordTab').classList.remove('active'); $('#editAccountTab').classList.add('active'); let email=''; if(!state.demo){const {data}=await db.auth.getUser();email=data?.user?.email||'';} $('#profileTabContent').innerHTML=`<div class="admin-card"><div class="eyebrow">ACCOUNT MANAGEMENT</div><h3 style="font:700 16px Orbitron;margin:6px 0 18px">EDIT ACCOUNT</h3><form id="accountForm"><div class="form-grid">
+      <div class="field"><label>EMAIL</label><input name="email" type="email" required value="${esc(email)}"></div><div class="field"><label>NEW PASSWORD</label><input name="password" type="password" minlength="6" placeholder="Leave blank to keep current password"></div>
+      <div class="field"><label>DISCORD USER</label><input name="discord_user" value="${esc(u.discord_user||'')}"></div><div class="field"><label>ROBLOX USER</label><input name="roblox_user" required value="${esc(u.roblox_user||'')}"></div>
+      <div class="field"><label>CHARACTER NAME</label><input name="character_name" required value="${esc(u.character_name||'')}"></div>${profileSelectFields(u)}
+      </div><div class="modal-actions"><button class="primary-btn">SAVE ACCOUNT CHANGES</button></div></form></div>`;
+      $('#accountForm').onsubmit=saveAccountChanges;
+    };
+    $('#serviceRecordTab').onclick=service; $('#editAccountTab').onclick=account; service();
   }
 
   async function loadSettings() {
@@ -192,18 +242,26 @@
     openProfileModal(state.user, true);
   }
 
+  function optionTags(category,current){ return (state.personnelOptions[category]||[]).map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`).join(''); }
+  function profileSelectFields(p){ return `<div class="field"><label>RANK</label><select name="rank" required><option value="" disabled ${p.rank?'':'selected'}>Select rank</option>${optionTags('rank',p.rank)}</select></div><div class="field"><label>PATHWAY</label><select name="pathway" required><option value="" disabled ${p.pathway?'':'selected'}>Select pathway</option>${optionTags('pathway',p.pathway)}</select></div><div class="field"><label>CLASS</label><select name="class" required><option value="" disabled ${p.class?'':'selected'}>Select class</option>${optionTags('class',p.class)}</select></div>`; }
+  async function saveAccountChanges(e){
+    e.preventDefault(); const fd=new FormData(e.currentTarget); const email=String(fd.get('email')||'').trim(); const password=String(fd.get('password')||'');
+    const patch={discord_user:String(fd.get('discord_user')||'').trim(),roblox_user:String(fd.get('roblox_user')||'').trim(),character_name:String(fd.get('character_name')||'').trim(),rank:fd.get('rank'),pathway:fd.get('pathway'),class:fd.get('class')};
+    if(state.demo){Object.assign(state.user,patch);toast('Demo account updated.','success');renderProfile();return;}
+    const authPatch={email}; if(password) authPatch.password=password; const {error:authError}=await db.auth.updateUser(authPatch); if(authError)return toast(authError.message,'error');
+    const {error}=await db.from('profiles').update(patch).eq('id',state.user.id); if(error)return toast(error.message,'error'); Object.assign(state.user,patch); setUser(state.user); toast(email?'Account updated. Email changes may require confirmation.':'Account updated.','success'); renderProfile();
+  }
+
   function openProfileModal(p, required=false) {
     $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">JEDI PERSONNEL RECORD</span><h2>${required?'COMPLETE PERSONNEL RECORD':'EDIT PERSONNEL RECORD'}</h2></div>${required?'':'<button class="close-btn" id="closeModal">×</button>'}</div>
       <form id="profileForm"><div class="form-grid">
-      <div class="field"><label>DISCORD USER</label><input value="${esc(p.discord_user||'')}" disabled></div>
+      <div class="field"><label>DISCORD USER</label><input name="discord_user" value="${esc(p.discord_user||'')}"></div>
       <div class="field"><label>ROBLOX USER</label><input name="roblox_user" required value="${esc(p.roblox_user||'')}"></div>
       <div class="field"><label>CHARACTER NAME</label><input name="character_name" required value="${esc(p.character_name||'')}"></div>
-      <div class="field"><label>RANK</label><input name="rank" required value="${esc(p.rank||'')}"></div>
-      <div class="field"><label>PATHWAY</label><input name="pathway" required value="${esc(p.pathway||'')}"></div>
-      <div class="field"><label>CLASS</label><input name="class" required value="${esc(p.class||'')}"></div>
+      ${profileSelectFields(p)}
       </div><div class="modal-actions">${required?'':'<button type="button" class="ghost-btn" id="cancelModal">CANCEL</button>'}<button class="primary-btn">${required?'SAVE PERSONNEL RECORD':'SAVE CHANGES'}</button></div></form></div></div>`;
     $('#closeModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML=''); $('#cancelModal')?.addEventListener('click',()=>$('#modalRoot').innerHTML='');
-    $('#profileForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');return;}const {error}=await db.from('profiles').update(patch).eq('id',p.id);if(error)return toast(error.message,'error');Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');};
+    $('#profileForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.user,patch);$('#modalRoot').innerHTML='';setUser(state.user);renderProfile();toast('Personnel record updated.','success');return;}const {error}=await db.from('profiles').update(patch).eq('id',p.id);if(error)return toast(error.message,'error');Object.assign(p,patch);if(p.id===state.user?.id){Object.assign(state.user,patch);setUser(state.user);renderProfile();}$('#modalRoot').innerHTML='';if(state.view==='admin') await renderAdminPersonnel();toast('Personnel record updated.','success');};
   }
 
   function bindProfileActions() { $('#editOwnProfileBtn')?.addEventListener('click',()=>openProfileModal(state.user,false)); $('#signOutBtn')?.addEventListener('click',signOut); }
@@ -217,10 +275,12 @@
         {id:'a3',mission_id:'m2',user_id:'other-user2',status:'approved',character_name:'Jedi Guardian Sera',rank:'Jedi Guardian'},
         {id:'a4',mission_id:'m3',user_id:'other-user3',status:'approved',character_name:'Jedi Consular Aryn',rank:'Jedi Consular'}
       ];
+      state.leaderboard=[{character_name:demoUser.character_name,rank:demoUser.rank,pathway:demoUser.pathway,class:demoUser.class,mission_count:1},{character_name:'Jedi Knight Varek',rank:'Knight',pathway:'Guardian',class:'Weapon Master',mission_count:1}];
       state.notifications = [{id:'n1',title:'MISSION TERMINAL ONLINE',body:'Demo mode is active. Connect Supabase to enable live personnel records.',read:false,created_at:new Date().toISOString()}];
+      loadLocalDirectory();
       setUser({...demoUser});
       $('#demoNote')?.classList.remove('hidden');
-      $('#discordLoginBtn').textContent='◆ ENTER DEMO TERMINAL';
+      $('#authSubmit').innerHTML='<span>◆</span> ENTER DEMO TERMINAL';
       updateNotificationBadge();
       return;
     }
@@ -228,17 +288,22 @@
     if(error) throw error;
     if(!user) { setUser(null); showView('auth'); return; }
     const profile = await getProfile(user.id);
-    if((profile.account_status||'active') !== 'active') {
-      const status=(profile.account_status||'restricted').toUpperCase();
-      await db.auth.signOut();
-      setUser(null); showView('auth');
-      toast(`ACCESS DENIED — ACCOUNT ${status}. Contact Mission Board command.`, 'error');
-      return;
+    const accessStatus=(profile.account_status||'active');
+    if(accessStatus === 'banned') {
+      await db.auth.signOut(); setUser(null); showView('auth');
+      toast('ACCESS DENIED — ACCOUNT BANNED. Contact Mission Board command for restoration.', 'error'); return;
+    }
+    if(accessStatus === 'kicked') {
+      await db.from('profiles').update({account_status:'active'}).eq('id',user.id);
+      await db.auth.signOut(); setUser(null); showView('auth');
+      toast('SESSION TERMINATED BY COMMAND. You may sign in again immediately.', 'error'); return;
     }
     setUser(profile);
-    await Promise.all([loadMissions(), loadApplications(), loadNotifications()]);
-    await loadAnnouncements();
+    await Promise.all([loadMissions(), loadDirectory(), loadApplications(), loadNotifications()]);
+    await Promise.all([loadAnnouncements(), loadLeaderboard()]);
     await loadSettings();
+    await loadPersonnelOptions();
+    await loadBlockedTerms();
     applySettings();
     await ensureProfileComplete();
   }
@@ -254,6 +319,7 @@
   }
   async function loadNotifications() { const {data,error}=await db.from('notifications').select('*').order('created_at',{ascending:false}).limit(30); if(error) throw error; state.notifications=data||[]; updateNotificationBadge(); }
   async function loadAnnouncements() { const {data}=await db.from('announcements').select('*').order('created_at',{ascending:false}); state.announcements=data||[]; }
+  async function loadLeaderboard() { const {data,error}=await db.rpc('get_service_leaderboard'); if(error){console.warn(error);state.leaderboard=[];return;} state.leaderboard=data||[]; }
 
   function updateNotificationBadge() { const n=state.notifications.filter(x=>!x.read).length; $('#notifCount').textContent=n; $('#notifCount').classList.toggle('hidden',!n); }
   function renderNotifications() {
@@ -265,10 +331,35 @@
     if(!state.demo && state.user) await db.from('notifications').update({read:true}).eq('user_id',state.user.id).eq('read',false);
   }
 
-  async function signIn() {
+  let authMode = 'login';
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    const register = mode === 'register';
+    $('#authSubmit').innerHTML = `<span>◆</span> ${register ? 'CREATE PERSONNEL ACCOUNT' : 'AUTHENTICATE'}`;
+    $('#authPassword').autocomplete = register ? 'new-password' : 'current-password';
+    $('#authSwitchText').textContent = register ? 'Already registered?' : 'New Jedi personnel?';
+    $('#authModeBtn').textContent = register ? 'RETURN TO LOGIN' : 'CREATE ACCOUNT';
+    $('#authForm').reset();
+    const note = $('.auth-note');
+    if(note) note.innerHTML = register ? '<span>◉</span> Create a secure personnel account. You will complete your Jedi personnel record after authentication.' : '<span>◉</span> Secure email authentication. Personnel credentials are handled by the Jedi Order authentication network.';
+  }
+
+  async function handleAuthSubmit(e) {
+    e.preventDefault();
+    const email = $('#authEmail').value.trim();
+    const password = $('#authPassword').value;
     if(state.demo) { setUser({...demoUser}); showView('dashboard'); toast('Demo terminal authenticated.','success'); return; }
-    const {error}=await db.auth.signInWithOAuth({provider:'discord',options:{redirectTo:window.location.href}});
-    if(error) toast(error.message,'error');
+    if(authMode === 'register') {
+      const {data,error}=await db.auth.signUp({email,password});
+      if(error) return toast(error.message,'error');
+      if(data.session) { toast('Personnel account created. Complete your Jedi record.','success'); await fetchAll(); showView('dashboard'); }
+      else toast('Account created. Check your email to confirm access, then return to the terminal.','success');
+    } else {
+      const {error}=await db.auth.signInWithPassword({email,password});
+      if(error) return toast(error.message,'error');
+      toast('Authentication accepted.','success');
+    }
   }
 
   async function signOut() {
@@ -300,7 +391,8 @@
       <div class="field"><label>MISSION CODE</label><input name="code" required value="${esc(m?.code||'JO-')}" placeholder="JO-001"></div>
       <div class="field"><label>MAIN CATEGORY</label><select name="main_category"><option value="WARFRONT" ${m?.main_category==='WARFRONT'?'selected':''}>WARFRONT OPERATIONS</option><option value="JEDI" ${m?.main_category==='JEDI'?'selected':''}>JEDI OPERATIONS</option></select></div>
       <div class="field"><label>MISSION TYPE</label><select name="type" id="missionType"></select></div>
-      <div class="field"><label>LOCATION</label><input name="location" required value="${esc(m?.location||'')}"></div>
+      <div class="field"><label>PLANET</label><select name="planet" id="missionPlanet"></select></div>
+      <div class="field"><label>LOCATION / SITE</label><input name="location" required value="${esc(m?.location||'')}"></div>
       <div class="field"><label>THREAT LEVEL</label><select name="threat_level">${THREATS.map(t=>`<option ${m?.threat_level===t?'selected':''}>${t}</option>`).join('')}</select></div>
       <div class="field"><label>REQUIRED PERSONNEL</label><input name="required_personnel" type="number" min="1" required value="${esc(m?.required_personnel||6)}"></div>
       <div class="field"><label>JEDI LEAD</label><input name="jedi_lead" required value="${esc(m?.jedi_lead||state.user?.character_name||'')}"></div>
@@ -309,9 +401,10 @@
       <div class="field full"><label>MISSION BRIEFING</label><textarea name="briefing" required>${esc(m?.briefing||'')}</textarea></div>
       <div class="field full"><label>RESULT / ARCHIVE SUMMARY</label><textarea name="result_summary" placeholder="Optional. Complete missions can retain an official result summary.">${esc(m?.result_summary||'')}</textarea></div>
       </div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn" type="submit">${isEdit?'SAVE CHANGES':'POST MISSION'}</button></div></form></div></div>`;
-    const category=$('[name="main_category"]'); const type=$('#missionType');
-    const fillTypes=()=>{const arr=category.value==='WARFRONT'?WARFRONT_TYPES:JEDI_TYPES; type.innerHTML=arr.map(x=>`<option ${m?.type===x?'selected':''}>${esc(x)}</option>`).join('');};
-    category.addEventListener('change',fillTypes); fillTypes();
+    const category=$('[name="main_category"]'); const type=$('#missionType'); const planet=$('#missionPlanet');
+    const fillTypes=()=>{const arr=state.missionTypes[category.value] || []; type.innerHTML=arr.map(x=>`<option ${m?.type===x?'selected':''}>${esc(x)}</option>`).join('');};
+    const fillPlanets=()=>{planet.innerHTML=state.planets.map(x=>`<option value="${esc(x)}" ${m?.planet===x?'selected':''}>${esc(x)}</option>`).join('');};
+    category.addEventListener('change',fillTypes); fillTypes(); fillPlanets();
     $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
     $('#missionForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);const payload=Object.fromEntries(fd.entries());payload.required_personnel=Number(payload.required_personnel);payload.date=new Date(payload.date).toISOString();await saveMission(payload,m?.id);});
   }
@@ -353,12 +446,16 @@
 
   function renderAdmin() {
     if(!isCommand()){showView('dashboard');return;}
+    $$('.owner-only-tab').forEach(b=>b.classList.toggle('hidden',!isOwner()));
     $$('.admin-tabs .tab').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===state.adminTab));
     if(state.adminTab==='missions') renderAdminMissions();
     if(state.adminTab==='applications') renderAdminApplications();
     if(state.adminTab==='personnel') renderAdminPersonnel();
     if(state.adminTab==='announcements') renderAdminAnnouncements();
     if(state.adminTab==='settings') renderAdminSettings();
+    if(state.adminTab==='directory') renderAdminDirectory();
+    if(state.adminTab==='personnel_options') renderPersonnelOptions();
+    if(state.adminTab==='name_filter') renderNameFilter();
   }
   function renderAdminMissions(){
     $('#adminContent').innerHTML=`<div class="admin-card"><table class="admin-table"><thead><tr><th>CODE</th><th>MISSION</th><th>CATEGORY</th><th>THREAT</th><th>DATE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${state.missions.map(m=>`<tr><td>${esc(m.code)}</td><td>${esc(m.name)}</td><td>${esc(m.main_category)}</td><td>${esc(m.threat_level)}</td><td>${esc(dateFmt(m.date))}</td><td>${esc(m.status)}</td><td><div class="admin-actions"><button class="mini-btn" data-edit="${esc(m.id)}">EDIT</button><button class="mini-btn" data-open="${esc(m.id)}">VIEW</button><button class="mini-btn danger" data-delete="${esc(m.id)}">DELETE</button></div></td></tr>`).join('')}</tbody></table></div>`;
@@ -372,18 +469,14 @@
     $$('[data-app-delete]').forEach(b=>b.onclick=()=>deleteApplication(b.dataset.appDelete));
   }
   async function renderAdminPersonnel(){
-    // Refresh the personnel directory whenever Command opens this tab.
     if(!state.demo && isCommand()) {
       $('#adminContent').innerHTML=`<div class="admin-card"><div class="empty"><strong>ACCESSING PERSONNEL DIRECTORY</strong>Synchronizing registered Jedi personnel...</div></div>`;
       const {data,error}=await db.from('profiles').select('*').order('character_name',{ascending:true});
-      if(error){
-        $('#adminContent').innerHTML=`<div class="admin-card"><div class="empty"><strong>PERSONNEL DIRECTORY UNAVAILABLE</strong>${esc(error.message)}</div></div>`;
-        return;
-      }
+      if(error){ $('#adminContent').innerHTML=`<div class="admin-card"><div class="empty"><strong>PERSONNEL DIRECTORY UNAVAILABLE</strong>${esc(error.message)}</div></div>`; return; }
       state.profiles=data||[];
     }
     const profiles=state.profiles.length?state.profiles:[state.user].filter(Boolean);
-    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">JEDI ORDER PERSONNEL DIRECTORY</span><h3 style="font:700 16px Orbitron;margin:6px 0">REGISTERED PERSONNEL — ${profiles.length}</h3></div></div><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${profiles.length?profiles.map(p=>{const status=(p.account_status||'active').toUpperCase(); const ownerActions=isOwner()&&p.id!==state.user?.id?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button><button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>${status==='ACTIVE'?`<button class="mini-btn danger" data-kick="${esc(p.id)}">KICK</button><button class="mini-btn danger" data-ban="${esc(p.id)}">BAN</button>`:`<button class="mini-btn approve" data-restore="${esc(p.id)}">RESTORE ACCESS</button>`}`:(p.id===state.user?.id?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>`:'—'); return `<tr><td>${esc(p.character_name||'PROFILE INCOMPLETE')}</td><td>${esc(p.roblox_user||'—')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td>${esc(roleLabel(p.role))}</td><td><strong>${esc(status)}</strong></td><td><div class="admin-actions">${ownerActions}</div></td></tr>`}).join(''):`<tr><td colspan="8"><div class="empty">No registered personnel found.</div></td></tr>`}</tbody></table></div>`;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">JEDI ORDER PERSONNEL DIRECTORY</span><h3 style="font:700 16px Orbitron;margin:6px 0">REGISTERED PERSONNEL — ${profiles.length}</h3></div></div><table class="admin-table"><thead><tr><th>CHARACTER</th><th>ROBLOX</th><th>RANK</th><th>PATHWAY</th><th>CLASS</th><th>ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${profiles.length?profiles.map(p=>{const status=(p.account_status||'active').toUpperCase();const self=p.id===state.user?.id;const actions=isOwner()?`<button class="mini-btn" data-profile-edit="${esc(p.id)}">EDIT</button>${self?'':`<button class="mini-btn" data-role="${esc(p.id)}">CHANGE ROLE</button>${status==='BANNED'?`<button class="mini-btn approve" data-restore="${esc(p.id)}">UNBAN / RESTORE ACCESS</button>`:`<button class="mini-btn danger" data-kick="${esc(p.id)}">KICK</button><button class="mini-btn danger" data-ban="${esc(p.id)}">BAN</button>`}`}`:'—';return `<tr><td>${esc(p.character_name||'PROFILE INCOMPLETE')}</td><td>${esc(p.roblox_user||'—')}</td><td>${esc(p.rank||'—')}</td><td>${esc(p.pathway||'—')}</td><td>${esc(p.class||'—')}</td><td>${esc(roleLabel(p.role))}</td><td><strong>${esc(status)}</strong></td><td><div class="admin-actions">${actions}</div></td></tr>`}).join(''):`<tr><td colspan="8"><div class="empty">No registered personnel found.</div></td></tr>`}</tbody></table></div>`;
     $$('[data-role]').forEach(b=>b.onclick=()=>changeRole(b.dataset.role));
     $$('[data-profile-edit]').forEach(b=>b.onclick=()=>openProfileModal(profiles.find(p=>p.id===b.dataset.profileEdit), false));
     $$('[data-kick]').forEach(b=>b.onclick=()=>setPersonnelAccess(b.dataset.kick,'kicked'));
@@ -394,17 +487,19 @@
     if(!isOwner()) return toast('Owner authorization required.','error');
     const p=state.profiles.find(x=>x.id===id); if(!p || id===state.user?.id) return;
     const verb=status==='banned'?'BAN':status==='kicked'?'KICK':'RESTORE ACCESS FOR';
-    const warning=status==='banned'?'This player will be denied Mission Terminal access until restored.':status==='kicked'?'This player will be denied Mission Terminal access until restored. Their personnel record and history will be preserved.':'This player will be able to access the Mission Terminal again.';
+    const warning=status==='banned'?'This player will be denied Mission Terminal access until you restore them.':status==='kicked'?'This terminates their current/next session once. They may sign back in immediately afterward.':'This removes the ban and restores Mission Terminal access.';
     if(!confirm(`${verb} ${p.character_name||p.roblox_user||'this player'}?\n\n${warning}`)) return;
     if(state.demo){p.account_status=status;renderAdminPersonnel();toast(`Personnel access set to ${status}.`,'success');return;}
     const {error}=await db.from('profiles').update({account_status:status}).eq('id',id);
     if(error)return toast(error.message,'error');
-    toast(status==='active'?'Personnel access restored.':status==='banned'?'Personnel banned from the terminal.':'Personnel kicked from the terminal.','success');
-    renderAdminPersonnel();
+    toast(status==='active'?'Ban removed — personnel access restored.':status==='banned'?'Personnel banned until manually restored.':'Kick issued — the player may sign back in after their session is terminated.','success');
+    await renderAdminPersonnel();
   }
   function renderAdminAnnouncements(){
-    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>`<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time></div>`).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;
-    $('#newAnnouncementBtn').onclick=openAnnouncementModal;
+    $('#adminContent').innerHTML=`<div class="admin-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><span class="eyebrow">COMMAND BULLETINS</span><h3 style="font:700 16px Orbitron;margin:6px 0">ANNOUNCEMENTS</h3></div><button class="primary-btn" id="newAnnouncementBtn">+ NEW BULLETIN</button></div>${state.announcements.length?state.announcements.map(a=>{const canManage=isOwner()||a.created_by===state.user?.id;return `<div class="notification"><strong>${esc(a.title)}</strong><p>${esc(a.body)}</p><time>${esc(dateFmt(a.created_at))}</time>${canManage?`<div style="display:flex;gap:8px;margin-top:12px"><button class="ghost-btn edit-announcement" data-id="${esc(a.id)}">EDIT</button><button class="danger-btn delete-announcement" data-id="${esc(a.id)}">DELETE</button></div>`:''}</div>`}).join(''):`<div class="empty">No command bulletins have been posted.</div>`}</div>`;
+    $('#newAnnouncementBtn').onclick=()=>openAnnouncementModal();
+    $$('.edit-announcement').forEach(b=>b.onclick=()=>openAnnouncementModal(state.announcements.find(a=>a.id===b.dataset.id)));
+    $$('.delete-announcement').forEach(b=>b.onclick=()=>deleteAnnouncement(b.dataset.id));
   }
   function renderAdminSettings(){
     const s=state.settings;
@@ -412,15 +507,195 @@
     $('#settingsForm').onsubmit=async e=>{e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');return;}const {error}=await db.from('site_settings').update(patch).eq('id',1);if(error)return toast(error.message,'error');Object.assign(state.settings,patch);applySettings();toast('Terminal settings updated.','success');};
   }
 
+
+  async function loadBlockedTerms(){
+    if(state.demo){ state.blockedTerms=[]; return; }
+    const {data,error}=await db.from('blocked_terms').select('*').order('term',{ascending:true});
+    if(error){ console.warn(error); return; }
+    state.blockedTerms=data||[];
+  }
+
+  function renderNameFilter(){
+    if(!isOwner()){state.adminTab='missions';return renderAdmin();}
+    const rows=state.blockedTerms.length ? state.blockedTerms.map(x=>`<div class="directory-row"><span>${esc(x.term)}</span><div class="admin-actions"><button class="mini-btn danger" data-remove-blocked="${esc(x.id)}">REMOVE</button></div></div>`).join('') : '<div class="empty">No custom blocked terms are configured.</div>';
+    $('#adminContent').innerHTML=`<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">OWNER AUTHORITY // PERSONNEL MODERATION</span><h3>NAME FILTER</h3><p>Blocks prohibited terms in Character Name, Roblox User, and Discord User. Matching ignores spaces, punctuation, repeated letters, and common number/symbol substitutions. Database enforcement prevents bypassing the website.</p></div><button class="primary-btn" id="addBlockedTermBtn">+ ADD BLOCKED TERM</button></div><div class="auth-note" style="margin-bottom:14px">The terminal rejects a personnel record with a generic naming-standards message. Avoid very short terms because they can appear inside legitimate names.</div><div class="directory-list">${rows}</div></div>`;
+    $('#addBlockedTermBtn').onclick=addBlockedTerm;
+    $$('[data-remove-blocked]').forEach(b=>b.onclick=()=>removeBlockedTerm(b.dataset.removeBlocked));
+  }
+
+  async function addBlockedTerm(){
+    if(!isOwner())return;
+    const term=prompt('Add a blocked term. Use the normal spelling; the filter also catches common evasions:')?.trim();
+    if(!term)return;
+    if(term.replace(/[^a-z0-9]/gi,'').length<4)return toast('Blocked terms must contain at least 4 letters/numbers to reduce false positives.','error');
+    const {error}=await db.from('blocked_terms').insert({term});
+    if(error)return toast(error.message,'error');
+    await loadBlockedTerms(); renderNameFilter(); toast('Blocked term added.','success');
+  }
+
+  async function removeBlockedTerm(id){
+    if(!isOwner()||!confirm('Remove this term from the personnel name filter?'))return;
+    const {error}=await db.from('blocked_terms').delete().eq('id',id);
+    if(error)return toast(error.message,'error');
+    await loadBlockedTerms(); renderNameFilter(); toast('Blocked term removed.','success');
+  }
+
+  function renderPersonnelOptions(){
+    if(!isOwner()){state.adminTab='missions';return renderAdmin();}
+    const block=(key,label)=>`<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">OWNER AUTHORITY</span><h3>${label}</h3><p>These values appear in personnel dropdowns for every account.</p></div><button class="primary-btn" data-add-option="${key}">+ ADD</button></div><div class="directory-list">${(state.personnelOptions[key]||[]).map((v,i)=>`<div class="directory-row"><span>${esc(v)}</span><div class="admin-actions"><button class="mini-btn" data-rename-option="${key}|${i}">RENAME</button><button class="mini-btn danger" data-remove-option="${key}|${i}">REMOVE</button></div></div>`).join('')}</div></div>`;
+    $('#adminContent').innerHTML=`<div class="directory-grid">${block('rank','RANK OPTIONS')}${block('pathway','PATHWAY OPTIONS')}</div>${block('class','CLASS OPTIONS')}`;
+    $$('[data-add-option]').forEach(b=>b.onclick=()=>mutatePersonnelOption('add',b.dataset.addOption));
+    $$('[data-rename-option]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.renameOption.split('|');mutatePersonnelOption('rename',k,Number(i));});
+    $$('[data-remove-option]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.removeOption.split('|');mutatePersonnelOption('remove',k,Number(i));});
+  }
+  async function mutatePersonnelOption(action,category,index){
+    if(!isOwner())return; const list=state.personnelOptions[category]||[];
+    if(action==='add'){const value=prompt(`Add ${category} option:`)?.trim();if(!value||list.includes(value))return; if(state.demo){list.push(value);return renderPersonnelOptions();}const {error}=await db.from('personnel_options').insert({category,value,sort_order:list.length});if(error)return toast(error.message,'error');}
+    if(action==='rename'){const old=list[index];const value=prompt(`Rename ${old}:`,old)?.trim();if(!value||value===old)return;if(state.demo){list[index]=value;return renderPersonnelOptions();}const {error}=await db.from('personnel_options').update({value}).eq('category',category).eq('value',old);if(error)return toast(error.message,'error');}
+    if(action==='remove'){const old=list[index];if(!confirm(`Remove "${old}" from ${category} options? Existing profiles keep their current value until edited.`))return;if(state.demo){list.splice(index,1);return renderPersonnelOptions();}const {error}=await db.from('personnel_options').delete().eq('category',category).eq('value',old);if(error)return toast(error.message,'error');}
+    await loadPersonnelOptions();renderPersonnelOptions();toast('Personnel dropdowns updated.','success');
+  }
+  async function loadPersonnelOptions(){
+    if(state.demo)return; const {data,error}=await db.from('personnel_options').select('*').order('sort_order',{ascending:true}); if(error){console.warn(error);return;} const out={rank:[],pathway:[],class:[]}; (data||[]).forEach(x=>out[x.category]?.push(x.value)); if(out.rank.length)state.personnelOptions=out;
+  }
+
+  function saveLocalDirectory() {
+    if (!state.demo) return;
+    localStorage.setItem('jediMissionDirectory', JSON.stringify({missionTypes:state.missionTypes, planets:state.planets}));
+  }
+
+  function loadLocalDirectory() {
+    if (!state.demo) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem('jediMissionDirectory') || 'null');
+      if (saved?.missionTypes?.WARFRONT?.length) state.missionTypes.WARFRONT = saved.missionTypes.WARFRONT;
+      if (saved?.missionTypes?.JEDI?.length) state.missionTypes.JEDI = saved.missionTypes.JEDI;
+      if (Array.isArray(saved?.planets) && saved.planets.length) state.planets = saved.planets;
+    } catch (_) {}
+  }
+
+  async function directoryMutation(table, action, payload, id) {
+    if (state.demo) return true;
+    let q;
+    if (action === 'insert') q = db.from(table).insert(payload);
+    if (action === 'update') q = db.from(table).update(payload).eq('id', id);
+    if (action === 'delete') q = db.from(table).delete().eq('id', id);
+    const {error} = await q;
+    if (error) { toast(error.message, 'error'); return false; }
+    return true;
+  }
+
+  async function addMissionType(category) {
+    const name = prompt(`Enter a new ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} mission subcategory:`)?.trim();
+    if (!name) return;
+    if (state.missionTypes[category].some(x => x.toLowerCase() === name.toLowerCase())) return toast('That subcategory already exists.', 'error');
+    if (!state.demo) {
+      const ok = await directoryMutation('mission_types','insert',{main_category:category,name,sort_order:state.missionTypes[category].length});
+      if (!ok) return;
+      await loadDirectory();
+    } else { state.missionTypes[category].push(name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} added to ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} Operations.`, 'success');
+  }
+
+  async function editMissionType(category, oldName) {
+    const name = prompt('Rename mission subcategory:', oldName)?.trim();
+    if (!name || name === oldName) return;
+    if (state.missionTypes[category].some(x => x.toLowerCase() === name.toLowerCase() && x !== oldName)) return toast('That subcategory already exists.', 'error');
+    const affected = state.missions.filter(m => m.main_category === category && m.type === oldName);
+    if (!state.demo) {
+      const row = await db.from('mission_types').select('id').eq('main_category',category).eq('name',oldName).single();
+      if (row.error) return toast(row.error.message,'error');
+      const ok = await directoryMutation('mission_types','update',{name},row.data.id);
+      if (!ok) return;
+      if (affected.length) {
+        const {error} = await db.from('missions').update({type:name}).eq('main_category',category).eq('type',oldName);
+        if (error) return toast(error.message,'error');
+      }
+      await loadDirectory(); await loadMissions();
+    } else {
+      state.missionTypes[category] = state.missionTypes[category].map(x => x === oldName ? name : x);
+      state.missions.forEach(m => { if(m.main_category===category && m.type===oldName) m.type=name; });
+      saveLocalDirectory();
+    }
+    renderAdminDirectory(); renderDashboard(); toast('Mission subcategory updated.','success');
+  }
+
+  async function removeMissionType(category, name) {
+    const affected = state.missions.filter(m => m.main_category === category && m.type === name && !['COMPLETED','CANCELLED'].includes(m.status));
+    if (affected.length) return toast(`Cannot remove ${name}: ${affected.length} active mission(s) still use it.`, 'error');
+    if (!confirm(`Remove the ${name} subcategory from the ${category === 'WARFRONT' ? 'Warfront' : 'Jedi'} roster?`)) return;
+    if (!state.demo) {
+      const row = await db.from('mission_types').select('id').eq('main_category',category).eq('name',name).single();
+      if (row.error) return toast(row.error.message,'error');
+      const ok = await directoryMutation('mission_types','delete',null,row.data.id); if(!ok)return;
+      await loadDirectory();
+    } else { state.missionTypes[category] = state.missionTypes[category].filter(x => x !== name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast('Mission subcategory removed.','success');
+  }
+
+  async function addPlanet() {
+    const name = prompt('Enter a planet to add to the planetary roster:')?.trim();
+    if (!name) return;
+    if (state.planets.some(x => x.toLowerCase() === name.toLowerCase())) return toast('That planet is already on the roster.','error');
+    if (!state.demo) { const ok=await directoryMutation('planets','insert',{name,sort_order:state.planets.length}); if(!ok)return; await loadDirectory(); }
+    else { state.planets.push(name); state.planets.sort(); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} added to the planetary roster.`,'success');
+  }
+
+  async function removePlanet(name) {
+    const affected = state.missions.filter(m => (m.planet === name) && !['COMPLETED','CANCELLED'].includes(m.status));
+    if (affected.length) return toast(`Cannot remove ${name}: ${affected.length} active mission(s) still use it.`, 'error');
+    if (!confirm(`Remove ${name} from the planetary roster?`)) return;
+    if (!state.demo) { const row=await db.from('planets').select('id').eq('name',name).single(); if(row.error)return toast(row.error.message,'error'); const ok=await directoryMutation('planets','delete',null,row.data.id); if(!ok)return; await loadDirectory(); }
+    else { state.planets=state.planets.filter(x=>x!==name); saveLocalDirectory(); }
+    renderAdminDirectory(); toast(`${name} removed from the planetary roster.`,'success');
+  }
+
+  function renderAdminDirectory() {
+    const typeSection = (category) => {
+      const label = category === 'WARFRONT' ? 'WARFRONT OPERATIONS' : 'JEDI OPERATIONS';
+      const rows = state.missionTypes[category].map((name,i)=>`<div class="directory-row"><span><b>${String(i+1).padStart(2,'0')}</b>${esc(name)}</span><div class="admin-actions"><button class="mini-btn" data-type-edit="${esc(category)}" data-type-name="${esc(name)}">RENAME</button><button class="mini-btn danger" data-type-delete="${esc(category)}" data-type-name="${esc(name)}">REMOVE</button></div></div>`).join('');
+      return `<div class="directory-card"><div class="directory-head"><div><span class="eyebrow">MISSION TAXONOMY</span><h3>${label}</h3><p>Manage the subcategories Command can assign to new operations.</p></div><button class="primary-btn" data-type-add="${category}">+ ADD SUBCATEGORY</button></div><div class="directory-list">${rows || '<div class="empty">No subcategories configured.</div>'}</div></div>`;
+    };
+    const planets = state.planets.map((name,i)=>`<div class="directory-row"><span><b>${String(i+1).padStart(2,'0')}</b>${esc(name)}</span><button class="mini-btn danger" data-planet-delete="${esc(name)}">REMOVE</button></div>`).join('');
+    $('#adminContent').innerHTML = `<div class="directory-grid">${typeSection('WARFRONT')}${typeSection('JEDI')}</div><div class="directory-card planet-card"><div class="directory-head"><div><span class="eyebrow">NAVIGATION DATABASE</span><h3>PLANETARY ROSTER</h3><p>Only planets on this roster appear when Command posts an operation.</p></div><button class="primary-btn" id="addPlanetBtn">+ ADD PLANET</button></div><div class="directory-list">${planets || '<div class="empty">No planets configured.</div>'}</div></div>`;
+    $$('[data-type-add]').forEach(b=>b.onclick=()=>addMissionType(b.dataset.typeAdd));
+    $$('[data-type-edit]').forEach(b=>b.onclick=()=>editMissionType(b.dataset.typeEdit,b.dataset.typeName));
+    $$('[data-type-delete]').forEach(b=>b.onclick=()=>removeMissionType(b.dataset.typeDelete,b.dataset.typeName));
+    $$('[data-planet-delete]').forEach(b=>b.onclick=()=>removePlanet(b.dataset.planetDelete));
+    $('#addPlanetBtn').onclick=addPlanet;
+  }
+
+  async function loadDirectory() {
+    if (state.demo) { loadLocalDirectory(); return; }
+    const [types, planets] = await Promise.all([
+      db.from('mission_types').select('*').order('main_category').order('sort_order').order('name'),
+      db.from('planets').select('*').order('sort_order').order('name')
+    ]);
+    if(types.error) throw types.error; if(planets.error) throw planets.error;
+    state.missionTypes = {WARFRONT:[], JEDI:[]};
+    (types.data||[]).forEach(x=>{ if(state.missionTypes[x.main_category]) state.missionTypes[x.main_category].push(x.name); });
+    state.planets = (planets.data||[]).map(x=>x.name);
+  }
+
   async function changeRole(id){
     const role=prompt('Enter role: player, command_staff, super_admin, or owner');if(!['player','command_staff','super_admin','owner'].includes(role))return;
     if(state.demo){toast('Role changes require live Supabase mode.');return;}
     const {error}=await db.from('profiles').update({role}).eq('id',id);if(error)return toast(error.message,'error');toast('Personnel role updated.','success');renderAdminPersonnel();
   }
-  function openAnnouncementModal(){
-    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>POST ANNOUNCEMENT</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required></div><div class="field full"><label>MESSAGE</label><textarea name="body" required></textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">PUBLISH</button></div></form></div></div>`;
+  function openAnnouncementModal(existing=null){
+    const editing=!!existing;
+    $('#modalRoot').innerHTML=`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><div><span class="eyebrow">COMMAND BULLETIN</span><h2>${editing?'EDIT ANNOUNCEMENT':'POST ANNOUNCEMENT'}</h2></div><button class="close-btn" id="closeModal">×</button></div><form id="announcementForm"><div class="form-grid"><div class="field full"><label>TITLE</label><input name="title" required value="${esc(existing?.title||'')}"></div><div class="field full"><label>MESSAGE</label><textarea name="body" required>${esc(existing?.body||'')}</textarea></div></div><div class="modal-actions"><button type="button" class="ghost-btn" id="cancelModal">CANCEL</button><button class="primary-btn">${editing?'SAVE CHANGES':'PUBLISH'}</button></div></form></div></div>`;
     $('#closeModal').onclick=$('#cancelModal').onclick=()=>$('#modalRoot').innerHTML='';
-    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){state.announcements.unshift({id:`a-${Date.now()}`,...data,created_at:new Date().toISOString()});$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');return;}const {error}=await db.from('announcements').insert({...data,created_by:state.user.id});if(error)return toast(error.message,'error');await loadAnnouncements();$('#modalRoot').innerHTML='';renderAdmin();toast('Bulletin published.','success');};
+    $('#announcementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());if(state.demo){if(editing){Object.assign(existing,data);}else{state.announcements.unshift({id:`a-${Date.now()}`,...data,created_by:state.user.id,created_at:new Date().toISOString()});state.notifications.unshift({id:`n-${Date.now()}`,title:`COMMAND BULLETIN: ${data.title}`,body:data.body,read:false,created_at:new Date().toISOString()});updateNotificationBadge();}$('#modalRoot').innerHTML='';renderAdmin();toast(editing?'Bulletin updated.':'Bulletin published and personnel notified.','success');return;}const q=editing?db.from('announcements').update(data).eq('id',existing.id):db.from('announcements').insert({...data,created_by:state.user.id});const {error}=await q;if(error)return toast(error.message,'error');await Promise.all([loadAnnouncements(),loadNotifications()]);$('#modalRoot').innerHTML='';renderAdmin();toast(editing?'Bulletin updated.':'Bulletin published and personnel notified.','success');};
+  }
+
+  async function deleteAnnouncement(id){
+    const a=state.announcements.find(x=>x.id===id);if(!a)return;
+    if(!(isOwner()||a.created_by===state.user?.id))return toast('You may only delete bulletins you issued.','error');
+    if(!confirm(`Delete bulletin “${a.title}”? This cannot be undone.`))return;
+    if(state.demo){state.announcements=state.announcements.filter(x=>x.id!==id);renderAdmin();toast('Bulletin deleted.','success');return;}
+    const {error}=await db.from('announcements').delete().eq('id',id);if(error)return toast(error.message,'error');await loadAnnouncements();renderAdmin();toast('Bulletin deleted.','success');
   }
 
   function bindEvents() {
@@ -428,7 +703,8 @@
       const nav=e.target.closest('[data-view]'); if(nav){e.preventDefault();showView(nav.dataset.view);return;}
       const card=e.target.closest('[data-mission-id]'); if(card){state.currentMission=state.missions.find(m=>m.id===card.dataset.missionId);showView('mission');return;}
     });
-    $('#discordLoginBtn').onclick=signIn;
+    $('#authForm').onsubmit=handleAuthSubmit;
+    $('#authModeBtn').onclick=()=>setAuthMode(authMode==='login'?'register':'login');
     $('#notificationBtn').onclick=()=>{$('#notificationPanel').classList.remove('hidden');renderNotifications();markNotificationsRead();};
     $('#closeNotifications').onclick=()=>$('#notificationPanel').classList.add('hidden');
     $('#userChip').onclick=()=>state.user&&showView('profile');
@@ -436,6 +712,15 @@
     $$('#categoryTabs .tab').forEach(b=>b.onclick=()=>{state.category=b.dataset.category;renderOperations();});
     $$('.admin-tabs .tab').forEach(b=>b.onclick=()=>{state.adminTab=b.dataset.adminTab;renderAdmin();});
     $('#newMissionBtn').onclick=()=>openMissionModal();
+  }
+
+  async function enforceAccountAccess() {
+    if(state.demo || !state.user || !db) return;
+    const userId=state.user.id;
+    const {data,error}=await db.from('profiles').select('account_status').eq('id',userId).single();
+    if(error || !data) return;
+    if(data.account_status==='banned') { await db.auth.signOut(); setUser(null); showView('auth'); toast('ACCESS REVOKED — YOUR ACCOUNT HAS BEEN BANNED. Contact Mission Board command.', 'error'); }
+    else if(data.account_status==='kicked') { await db.from('profiles').update({account_status:'active'}).eq('id',userId); await db.auth.signOut(); setUser(null); showView('auth'); toast('SESSION TERMINATED BY COMMAND. You may sign in again immediately.', 'error'); }
   }
 
   async function init() {
@@ -456,4 +741,5 @@
     }
   }
   init();
+  setInterval(enforceAccountAccess, 10000);
 })();
